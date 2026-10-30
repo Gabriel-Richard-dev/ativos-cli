@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from ativos_cli.models import CatalogEntry, FetchStatus
 from ativos_cli.repositories.asset_repository import AssetRepository
-from ativos_cli.repositories.database import connect
+from ativos_cli.repositories.database import MIGRATIONS, connect
 from tests.conftest import failed_result, ok_result
 
 
@@ -81,7 +81,7 @@ def test_migrations_are_idempotent(tmp_path):
     path = tmp_path / "ativos.db"
     connect(path).close()
     conn = connect(path)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
 
 
 def test_catalog_keeps_validation_mark(repo):

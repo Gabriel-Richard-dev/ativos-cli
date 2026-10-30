@@ -47,6 +47,8 @@ MIGRATIONS = [
         value  TEXT
     );
     """,
+    # Consultas gravadas antes desta versão ficam sem o percentual do site.
+    "ALTER TABLE asset_snapshots ADD COLUMN rendimento_pct TEXT;",
 ]
 
 

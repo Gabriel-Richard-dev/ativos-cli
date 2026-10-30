@@ -42,15 +42,8 @@ def format_brl(value: Decimal | None) -> str:
     return f"R$ {text}"
 
 
-def yield_percent(rendimento: Decimal | None, cotacao_base: Decimal | None) -> Decimal | None:
-    """Rendimento em % da cotação-base (dividend yield do período)."""
-    if rendimento is None or not cotacao_base:
-        return None
-    return rendimento / cotacao_base * 100
-
-
 def format_percent(value: Decimal | None) -> str:
-    """Formata como "1,09%"."""
+    """Formata como "1,0905125408942%", com todas as casas que o valor tiver."""
     if value is None:
         return NA
-    return f"{value:.2f}%".replace(".", ",")
+    return f"{value:f}%".replace(".", ",")

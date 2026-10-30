@@ -30,7 +30,7 @@ from ativos_cli.ui.tables import (
 )
 from ativos_cli.ui.theme import make_console
 from ativos_cli.utils.dates import format_date, format_datetime
-from ativos_cli.utils.money import format_brl, yield_percent
+from ativos_cli.utils.money import format_brl
 
 log = logging.getLogger(__name__)
 
@@ -142,14 +142,15 @@ def main(
 
 def view_to_dict(view: AssetView) -> dict:
     snap = view.valid
-    pct = yield_percent(snap.rendimento, snap.cotacao_base) if snap else None
     return {
         "ticker": view.ticker,
         "nome": view.name,
         "datacom": snap.datacom.isoformat() if snap and snap.datacom else None,
         "rendimento": str(snap.rendimento) if snap and snap.rendimento is not None else None,
         "cotacao_base": str(snap.cotacao_base) if snap and snap.cotacao_base is not None else None,
-        "rendimento_pct": str(round(pct, 4)) if pct is not None else None,
+        "rendimento_pct": (
+            str(snap.rendimento_pct) if snap and snap.rendimento_pct is not None else None
+        ),
         "data_pagamento": (
             snap.data_pagamento.isoformat() if snap and snap.data_pagamento else None
         ),

@@ -6,10 +6,10 @@ Acompanhe pelo terminal a **data-com**, o **rendimento por cota** e a
 
 ```text
 $ ativos
-  Ativo    Data-com     Rendimento   Rend. %   Cotação-base   Pagamento
-  ──────────────────────────────────────────────────────────────────────
-  MXRF11   30/10/2026   R$ 0,095     1,07%     R$ 8,87        16/11/2026
-  KNCR11   30/09/2026   R$ 1,13      1,06%     R$ 106,40      14/10/2026
+  Ativo    Data-com     Rendimento   Rend. %             Cotação-base   Pagamento
+  ────────────────────────────────────────────────────────────────────────────────
+  MXRF11   30/10/2026   R$ 0,095     1,0710259301015%    R$ 8,87        16/11/2026
+  XPLG11   30/10/2026   R$ 0,82      0,91253060316047%   R$ 89,86       16/11/2026
 ```
 
 ## Instalação
@@ -73,8 +73,9 @@ ativos catalog status
 ```
 
 Todos os comandos só imprimem o resultado no terminal, numa tabela simples. Em
-terminais com menos de 76 colunas, a coluna Pagamento é omitida. `Rend. %` é o
-rendimento dividido pela cotação-base (o dividend yield do mês).
+terminais com menos de 86 colunas, a coluna Pagamento é omitida. `Rend. %` é o
+rendimento em % da cotação-base (o dividend yield do mês), exatamente como o site
+informa, sem arredondar.
 
 ### Em scripts
 
@@ -93,7 +94,7 @@ A página de cada fundo no fiis.com.br (`https://fiis.com.br/{ticker}/`) traz um
 | Rendimento | `pr_valor` / `ur_valor` | Valor por cota, em `Decimal` |
 | Cotação-base | `pr_cotacaobase` / `ur_cotacao_base` | Preço de referência do rendimento, **não** a cotação atual |
 | Pagamento | `pr_datapagamento` / `ur_data_pagamento` | Exibido em terminais largos e nos detalhes |
-| Rend. % | calculado | Rendimento ÷ cotação-base × 100 |
+| Rend. % | `pr_rendimento` / `ur_rendimento` | Rendimento em % da cotação-base, sem arredondar |
 | Cotação atual | `valor` | Só nos detalhes |
 
 `pr_*` é o próximo rendimento anunciado e `ur_*` é o último pago. Vale o grupo

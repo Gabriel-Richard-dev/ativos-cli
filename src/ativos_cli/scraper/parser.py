@@ -29,10 +29,18 @@ _DATALAYER_MARKER = "var dataLayer_content ="
 _SEARCH_ISLAND = re.compile(r'data-island="search"\s+data-props="([^"]*)"')
 _TICKER = re.compile(r"^[A-Z]{4}\d{2}B?$")
 
-# (rótulo, campo da data-com, campo do valor, campo da cotação-base, campo do pagamento)
+# (rótulo, campo da data-com, campo do valor, campo da cotação-base, campo do pagamento,
+#  campo do rendimento em %)
 _DIVIDEND_GROUPS = (
-    ("pr_*", "pr_database", "pr_valor", "pr_cotacaobase", "pr_datapagamento"),
-    ("ur_*", "ur_data_base", "ur_valor", "ur_cotacao_base", "ur_data_pagamento"),
+    ("pr_*", "pr_database", "pr_valor", "pr_cotacaobase", "pr_datapagamento", "pr_rendimento"),
+    (
+        "ur_*",
+        "ur_data_base",
+        "ur_valor",
+        "ur_cotacao_base",
+        "ur_data_pagamento",
+        "ur_rendimento",
+    ),
 )
 
 
@@ -74,7 +82,7 @@ def parse_fund_page(page: str, expected_ticker: str | None = None) -> FundData:
     )
 
     candidates = []
-    for label, f_date, f_value, f_base, f_pay in _DIVIDEND_GROUPS:
+    for label, f_date, f_value, f_base, f_pay, f_pct in _DIVIDEND_GROUPS:
         datacom = parse_date(meta.get(f_date))
         rendimento = to_decimal(meta.get(f_value))
         if datacom is None and rendimento is None:
@@ -83,14 +91,17 @@ def parse_fund_page(page: str, expected_ticker: str | None = None) -> FundData:
             # Sem o par data-com + valor não há como associar o rendimento com segurança.
             data.notes.append(f"Campos {label} incompletos; ignorados por ambiguidade.")
             continue
-        candidates.append((datacom, label, rendimento, meta.get(f_base), meta.get(f_pay)))
+        candidates.append(
+            (datacom, label, rendimento, meta.get(f_base), meta.get(f_pay), meta.get(f_pct))
+        )
 
     if candidates:
         # O grupo com a data-com mais recente vence; em empate, "pr_*" (listado primeiro).
-        datacom, label, rendimento, base, pay = max(candidates, key=lambda c: c[0])
+        datacom, label, rendimento, base, pay, pct = max(candidates, key=lambda c: c[0])
         data.datacom = datacom
         data.rendimento = rendimento
         data.cotacao_base = to_decimal(base)
+        data.rendimento_pct = to_decimal(pct)
         data.data_pagamento = parse_date(pay)
         data.source_field = label
     return data

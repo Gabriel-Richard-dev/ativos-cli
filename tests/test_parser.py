@@ -12,7 +12,7 @@ from ativos_cli.scraper.parser import (
     parse_fund_page,
 )
 from ativos_cli.utils.dates import format_date, parse_date
-from ativos_cli.utils.money import format_brl, format_percent, to_decimal, yield_percent
+from ativos_cli.utils.money import format_brl, format_percent, to_decimal
 from tests.conftest import fixture_text
 
 
@@ -200,8 +200,11 @@ class TestNormalization:
         assert format_date(None) == "N/D"
 
 
-def test_yield_percent():
-    assert format_percent(yield_percent(Decimal("0.10"), Decimal("9.17"))) == "1,09%"
-    assert yield_percent(Decimal("0.10"), None) is None
-    assert yield_percent(Decimal("0.10"), Decimal("0")) is None
+def test_percent_keeps_all_places():
+    assert format_percent(Decimal("1.0905125408942")) == "1,0905125408942%"
     assert format_percent(None) == "N/D"
+
+
+def test_fund_page_brings_site_yield():
+    data = parse_fund_page(fixture_text("fiis_mxrf11.html"))
+    assert data.rendimento_pct == Decimal("1.0905125408942")

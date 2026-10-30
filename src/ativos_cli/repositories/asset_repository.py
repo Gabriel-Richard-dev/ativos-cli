@@ -96,15 +96,16 @@ class AssetRepository:
             asset_id = self._ensure_asset(conn, result.ticker, data.name if data else None)
             cur = conn.execute(
                 """INSERT INTO asset_snapshots
-                   (asset_id, status, datacom, data_pagamento, rendimento, cotacao_base,
-                    cotacao_atual, source_field, source_url, fetched_at, error)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (asset_id, status, datacom, data_pagamento, rendimento, rendimento_pct,
+                    cotacao_base, cotacao_atual, source_field, source_url, fetched_at, error)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     asset_id,
                     result.status.value,
                     _iso(data.datacom) if data else None,
                     _iso(data.data_pagamento) if data else None,
                     _dec(data.rendimento) if data else None,
+                    _dec(data.rendimento_pct) if data else None,
                     _dec(data.cotacao_base) if data else None,
                     _dec(data.cotacao_atual) if data else None,
                     data.source_field if data else None,
@@ -158,6 +159,7 @@ class AssetRepository:
             datacom=parse_date(row["datacom"]),
             data_pagamento=parse_date(row["data_pagamento"]),
             rendimento=dec("rendimento"),
+            rendimento_pct=dec("rendimento_pct"),
             cotacao_base=dec("cotacao_base"),
             cotacao_atual=dec("cotacao_atual"),
             source_field=row["source_field"],

@@ -15,6 +15,8 @@ class FundData(BaseModel):
     datacom: date | None = None
     data_pagamento: date | None = None
     rendimento: Decimal | None = None
+    # Rendimento em % da cotação-base, como o site informa (sem arredondar).
+    rendimento_pct: Decimal | None = None
     cotacao_base: Decimal | None = None
     cotacao_atual: Decimal | None = None
     data_cotacao: date | None = None
@@ -57,6 +59,7 @@ class Snapshot(BaseModel):
     datacom: date | None = None
     data_pagamento: date | None = None
     rendimento: Decimal | None = None
+    rendimento_pct: Decimal | None = None
     cotacao_base: Decimal | None = None
     cotacao_atual: Decimal | None = None
     source_field: str | None = None
