@@ -104,8 +104,9 @@ com segurança.
 
 O catálogo de pesquisa vem do índice de busca que o site embute em todas as páginas.
 
-**Boas práticas de acesso:** o coletor (Scrapy) respeita o `robots.txt`, faz uma
-requisição por vez com intervalo de 1 segundo, tenta de novo no máximo 2 vezes e se
+**Boas práticas de acesso:** o coletor (Scrapy) respeita o `robots.txt`, faz até 4
+requisições em paralelo com intervalo mínimo de 0,25 segundo (o AutoThrottle reduz o
+ritmo se o site ficar lento), tenta de novo no máximo 2 vezes e se
 identifica como `ativos-cli`. Só consulta o site quando você pede. O Status Invest,
 fonte prevista originalmente, bloqueia acesso automatizado (Cloudflare) e por isso
 não é usado.

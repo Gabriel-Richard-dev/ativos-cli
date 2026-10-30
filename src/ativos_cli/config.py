@@ -15,8 +15,11 @@ BASE_URL = "https://fiis.com.br"
 CATALOG_URL = f"{BASE_URL}/lista-de-fundos-imobiliarios/"
 USER_AGENT = f"ativos-cli/{__version__} (uso pessoal)"
 
-# Limites de acesso ao site: uma requisição por vez, com intervalo entre elas.
-DOWNLOAD_DELAY_SECONDS = 1.0
+# Limites de acesso ao site: até PARALLEL_REQUESTS buscas ao mesmo tempo, com um
+# intervalo mínimo entre elas. O AutoThrottle do Scrapy reduz o ritmo se o site
+# ficar lento.
+PARALLEL_REQUESTS = 4
+DOWNLOAD_DELAY_SECONDS = 0.25
 DOWNLOAD_TIMEOUT_SECONDS = 20
 RETRY_TIMES = 2
 

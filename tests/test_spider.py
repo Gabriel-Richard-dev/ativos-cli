@@ -75,6 +75,7 @@ def test_items_are_json_serializable(capsys):
 def test_settings_respect_site_limits():
     settings = scrapy_settings()
     assert settings["ROBOTSTXT_OBEY"] is True
-    assert settings["CONCURRENT_REQUESTS_PER_DOMAIN"] == 1
-    assert settings["DOWNLOAD_DELAY"] >= 1
+    assert 1 < settings["CONCURRENT_REQUESTS_PER_DOMAIN"] <= 4
+    assert settings["DOWNLOAD_DELAY"] > 0
+    assert settings["AUTOTHROTTLE_ENABLED"] is True
     assert 429 in settings["RETRY_HTTP_CODES"]
