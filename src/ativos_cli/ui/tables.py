@@ -1,5 +1,7 @@
 """Renderização de painéis e tabelas com Rich."""
 
+from datetime import date
+
 from rich import box
 from rich.console import Group, RenderableType
 from rich.padding import Padding
@@ -22,6 +24,7 @@ WIDE = 84
 NARROW = 64
 # Tabela simples: recuo da borda e largura mínima para mostrar o pagamento.
 INDENT = 2
+DASH = "—"
 PLAIN_WIDE = 76
 
 
@@ -98,11 +101,12 @@ def assets_table(
     return table
 
 
-def plain_table(views: list[AssetView], width: int) -> Padding:
+def plain_table(views: list[AssetView], width: int, today: date) -> Padding:
     """Tabela enxuta, uma linha por ativo, para imprimir direto no terminal.
 
-    Fica recuada da borda do terminal. Em terminais estreitos, a coluna de pagamento
-    some para caber o essencial.
+    Só mostra rendimentos com data-com no mês de `today` em diante; os de meses
+    anteriores viram uma linha com traços. Fica recuada da borda do terminal e, em
+    terminais estreitos, a coluna de pagamento some para caber o essencial.
     """
     show_payment = width >= PLAIN_WIDE
     table = Table(box=box.SIMPLE_HEAD, header_style="bold", pad_edge=False, show_edge=False)
@@ -113,8 +117,12 @@ def plain_table(views: list[AssetView], width: int) -> Padding:
     table.add_column("Cotação-base", no_wrap=True)
     if show_payment:
         table.add_column("Pagamento", no_wrap=True)
+    month_start = today.replace(day=1)
     for view in views:
         snap = view.valid
+        if snap is None or snap.datacom is None or snap.datacom < month_start:
+            table.add_row(view.ticker, *[DASH] * (len(table.columns) - 1))
+            continue
         row = [
             view.ticker,
             format_date(snap.datacom if snap else None),

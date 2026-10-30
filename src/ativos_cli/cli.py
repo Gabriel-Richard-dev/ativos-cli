@@ -4,6 +4,7 @@ import functools
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import date
 
 import typer
 from rich.console import Console
@@ -58,6 +59,11 @@ app = typer.Typer(
 )
 catalog_app = typer.Typer(help="Catálogo local de ativos usado na pesquisa.", no_args_is_help=True)
 app.add_typer(catalog_app, name="catalog")
+
+
+def today() -> date:
+    """Data local de hoje (os testes substituem para fixar o mês)."""
+    return date.today()
 
 
 def build_fetcher(debug: bool) -> Fetcher:
@@ -173,7 +179,7 @@ def show_asset(state: State, raw_ticker: str, details: bool = False) -> AssetVie
     with console.status(f"Consultando {ticker} no {config.SOURCE_NAME}..."):
         view = state.service.lookup(ticker)
 
-    console.print(plain_table([view], console.width))
+    console.print(plain_table([view], console.width, today()))
     if view.status != DisplayStatus.UPDATED and (note := fetch_note(view)):
         console.print(note)
     if details:
@@ -299,7 +305,7 @@ def refresh_command(
 def print_summary(state: State, summary) -> None:
     """Tabela simples dos ativos atualizados, com as falhas listadas embaixo."""
     console = state.console
-    console.print(plain_table(summary.views, console.width))
+    console.print(plain_table(summary.views, console.width, today()))
     for view in summary.failed:
         error = view.last_error or "sem dados"
         console.print(Text(f"  {view.ticker}: {error}", style="fail"))
@@ -425,7 +431,7 @@ def run_search(state: State, term: str, as_json: bool = False) -> None:
         if is_valid_ticker(normalize_ticker(term)):
             console.print(Text(f"  Tente consultar direto: ativos {term.upper()}", style="muted"))
         return
-    console.print(plain_table([views[h.entry.ticker] for h in hits], console.width))
+    console.print(plain_table([views[h.entry.ticker] for h in hits], console.width, today()))
 
 
 @app.command("search")

@@ -1,4 +1,5 @@
 import json
+from datetime import date
 
 import pytest
 from typer.testing import CliRunner
@@ -15,6 +16,8 @@ def run(tmp_path, monkeypatch, fetcher):
     monkeypatch.setenv("ATIVOS_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("ATIVOS_NO_INPUT", "1")
     monkeypatch.setattr(cli, "build_fetcher", lambda debug: fetcher)
+    # As fixtures têm data-com em 30/09/2026: fixa "hoje" nesse mês.
+    monkeypatch.setattr(cli, "today", lambda: date(2026, 9, 30))
     runner = CliRunner()
 
     def invoke(*args, width=100):
@@ -65,6 +68,16 @@ def test_show_one_row_table(run):
     assert "CONSULTA" not in result.output
     rows = [line for line in result.output.splitlines() if "R$" in line]
     assert len(rows) == 1
+
+
+def test_previous_month_datacom_shows_dashes(run, monkeypatch):
+    monkeypatch.setattr(cli, "today", lambda: date(2026, 10, 1))
+    result = run("MXRF11")
+    assert result.exit_code == 0, result.output
+    assert "30/09/2026" not in result.output
+    assert "R$" not in result.output
+    row = next(line for line in result.output.splitlines() if "MXRF11" in line)
+    assert row.split() == ["MXRF11", "—", "—", "—", "—", "—"]
 
 
 def test_show_json(run):

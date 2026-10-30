@@ -78,6 +78,10 @@ rendimento em % da cotação-base (o dividend yield do mês), como o site inform
 cortado em 3 casas decimais (sem arredondar) já na coleta, então o `--json` e o
 histórico também guardam 3 casas.
 
+A tabela só mostra rendimentos com data-com no mês atual (ou depois). Se a data-com
+mais recente de um ativo for de um mês anterior, a linha dele aparece com traços (`—`)
+até sair a do mês. O `--json` continua trazendo o último dado, seja de que mês for.
+
 ### Em scripts
 
 `show`, `refresh` e `search` aceitam `--json`. O `refresh` sai com código 1 se algum
