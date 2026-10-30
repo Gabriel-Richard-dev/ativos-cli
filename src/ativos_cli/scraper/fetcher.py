@@ -1,7 +1,10 @@
 """Coleta dos dados de cada FII a partir das fontes oficiais.
 
 Para cada ticker:
-1. CNPJ e nome: página do fundo no fiis.com.br, uma única vez (fica em cache).
+1. CNPJ e nome, uma única vez por fundo (fica em cache): página do fundo no
+   fiis.com.br; se ela não existir, cadastro da CVM pelo ISIN e, para fundos que
+   mudaram de ticker, pelo nome oficial informado pela B3. O aviso do FundosNet
+   confirma: ele precisa trazer o ticker procurado.
 2. Data-com, valor e pagamento: último aviso de rendimentos no FundosNet (B3).
    Avisos publicados não mudam, então cada um é lido uma vez e fica em cache; numa
    atualização com cache, sobra uma requisição (a busca) por fundo.
@@ -23,7 +26,7 @@ from pathlib import Path
 from ativos_cli import config
 from ativos_cli.errors import AtivosError
 from ativos_cli.models import CatalogEntry, FetchResult, FetchStatus, FundData, FundIdentity
-from ativos_cli.scraper import b3, fundosnet
+from ativos_cli.scraper import b3, cvm, fundosnet
 from ativos_cli.scraper.b3 import ClosingPrices
 from ativos_cli.scraper.http import Http, HttpStatusError
 from ativos_cli.scraper.parser import parse_catalog, parse_fund_identity
@@ -66,6 +69,7 @@ class OfficialFetcher:
         self.prices = ClosingPrices(self.http, cache_dir / "cotahist")
         self.identities = JsonCache(cache_dir / "fundos.json")
         self.notices = JsonCache(cache_dir / "avisos.json")
+        self.registry = cvm.Registry(self.http, cache_dir / "cvm")
 
     # --- Fetcher ---------------------------------------------------------------
 
@@ -128,10 +132,27 @@ class OfficialFetcher:
         cached = self.identities.get(ticker)
         if cached:
             return FundIdentity.model_validate(cached)
-        page = self.http.get(config.fund_url(ticker)).decode("utf-8", "replace")
-        identity = parse_fund_identity(page, expected_ticker=ticker)
+        try:
+            page = self.http.get(config.fund_url(ticker)).decode("utf-8", "replace")
+            identity = parse_fund_identity(page, expected_ticker=ticker)
+        except HttpStatusError as exc:
+            if exc.status != 404:
+                raise
+            identity = self._registered_identity(ticker)
+            if identity is None:
+                raise
         self.identities.set(ticker, identity.model_dump())
         return identity
+
+    def _registered_identity(self, ticker: str) -> FundIdentity | None:
+        """CNPJ pelo cadastro da CVM: primeiro pelo ISIN, depois pelo nome na B3."""
+        fund = self.registry.by_ticker(ticker)
+        if fund is None:
+            name = b3.parse_fund_name(self.http.get(b3.funds_search_url(ticker)), ticker)
+            fund = self.registry.by_name(name) if name else None
+        if fund is None:
+            return None
+        return FundIdentity(ticker=ticker, name=fund.name, cnpj=fund.cnpj)
 
     def _fund_data(self, identity: FundIdentity) -> FundData:
         data = FundData(ticker=identity.ticker, name=identity.name)

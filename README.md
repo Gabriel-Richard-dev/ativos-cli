@@ -98,9 +98,17 @@ Os rendimentos vêm das fontes oficiais da B3:
 | Cotação-base | Arquivo diário de cotações da B3 (COTAHIST) | Preço de fechamento na data-com. A B3 publica o arquivo na manhã seguinte; até lá, vale a cotação do momento do [serviço de cotações da B3](https://cotacao.b3.com.br) (atraso de 15 min), marcada com `*` como provisória |
 | Rend. % | Calculado | Rendimento ÷ cotação-base × 100, cortado em 3 casas (sem arredondar); com `*` quando a cotação é provisória |
 
-O [fiis.com.br](https://fiis.com.br) só é usado para descobrir o nome e o CNPJ de cada
-fundo (uma vez por fundo; o CNPJ localiza os avisos no FundosNet) e para a lista de
-fundos da pesquisa.
+Para achar os avisos de um fundo no FundosNet é preciso o CNPJ dele, descoberto uma
+vez por fundo e guardado em cache:
+
+1. na página do fundo no [fiis.com.br](https://fiis.com.br);
+2. se ela não existir, no cadastro de FIIs dos [dados abertos da CVM](https://dados.cvm.gov.br),
+   pelo código do ISIN;
+3. para fundos que mudaram de ticker (ex.: MALL11 → PMLL11, cujo ISIN na CVM ainda é
+   o antigo), pelo nome oficial do fundo na busca de fundos listados da B3.
+
+O aviso do FundosNet confirma o CNPJ: ele precisa trazer o ticker procurado. A lista de
+fundos da pesquisa vem do fiis.com.br.
 
 **Cache e desempenho:** CNPJ, avisos já lidos (um aviso publicado não muda) e os
 arquivos de cotações ficam em cache no diretório de dados (`cache/`). Numa atualização

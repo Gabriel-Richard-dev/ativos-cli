@@ -6,6 +6,7 @@
   usado como cotação-base provisória enquanto o COTAHIST do dia não sai.
 """
 
+import base64
 import io
 import json
 import threading
@@ -19,6 +20,7 @@ from ativos_cli.scraper.http import Http, HttpStatusError
 
 BASE_URL = "https://bvmf.bmfbovespa.com.br/InstDados/SerHist"
 QUOTE_URL = "https://cotacao.b3.com.br/mds/api/v1/instrumentQuotation"
+FUNDS_URL = "https://sistemaswebb3-listados.b3.com.br/fundsListedProxy/Search/GetListFunds"
 # Mercado à vista: é onde as cotas de FII são negociadas.
 SPOT_MARKET = "010"
 
@@ -44,6 +46,24 @@ def parse_cotahist(payload: bytes) -> dict[str, Decimal]:
             continue
         closes[line[12:24].strip()] = Decimal(int(line[108:121])) / 100
     return closes
+
+
+def funds_search_url(ticker: str) -> str:
+    query = {"language": "pt-br", "pageNumber": 1, "pageSize": 20}
+    query |= {"keyword": ticker[:4], "typeFund": "FII"}
+    return f"{FUNDS_URL}/{base64.b64encode(json.dumps(query).encode()).decode()}"
+
+
+def parse_fund_name(payload: bytes, ticker: str) -> str | None:
+    """Nome oficial do FII listado com o código do ticker (as 4 letras), se houver."""
+    try:
+        results = json.loads(payload).get("results") or []
+    except (ValueError, AttributeError) as exc:
+        raise ParseError("Resposta inesperada da busca de fundos da B3.") from exc
+    for fund in results:
+        if (fund.get("acronym") or "").upper() == ticker[:4]:
+            return fund.get("fundName") or None
+    return None
 
 
 def quote_url(ticker: str) -> str:

@@ -177,7 +177,7 @@ def print_json(state: State, payload) -> None:
 def show_asset(state: State, raw_ticker: str, details: bool = False) -> AssetView:
     console = state.console
     ticker = normalize_ticker(raw_ticker)
-    with console.status(f"Consultando {ticker} na {config.SOURCE_NAME}..."):
+    with console.status(f"Buscando {ticker}..."):
         view = state.service.lookup(ticker)
 
     console.print(plain_table([view], console.width, today()))
@@ -209,7 +209,7 @@ def show_command(
 def add_asset(state: State, raw_ticker: str) -> Text:
     """Adiciona e devolve a mensagem de resultado."""
     ticker = normalize_ticker(raw_ticker)
-    with state.console.status(f"Validando {ticker}..."):
+    with state.console.status(f"Buscando {ticker}..."):
         outcome = state.service.add(ticker)
     if not outcome.added:
         message = Text(f"  {ticker} já está na sua carteira.", style="muted")
@@ -273,11 +273,11 @@ def refresh_with_progress(state: State, tickers: list[str] | None):
         transient=True,
     )
     with progress:
-        task = progress.add_task(f"Consultando a {config.SOURCE_NAME}", total=total)
+        task = progress.add_task("Buscando...", total=total)
 
         def advance(result: FetchResult) -> None:
-            mark = "ok" if result.status == FetchStatus.OK else "falha"
-            progress.update(task, advance=1, description=f"{result.ticker} ({mark})")
+            found = "encontrado" if result.status == FetchStatus.OK else "não encontrado"
+            progress.update(task, advance=1, description=f"{result.ticker} {found}")
 
         return state.service.refresh(tickers, on_progress=advance)
 
@@ -362,7 +362,7 @@ def refresh_catalog_for_search(state: State) -> bool:
     """
     console = state.console
     try:
-        with console.status(f"Pesquisando no {config.CATALOG_SOURCE}..."):
+        with console.status("Procurando fundos..."):
             state.search.update_catalog()
         return True
     except AtivosError as exc:
@@ -376,9 +376,9 @@ def refresh_catalog_for_search(state: State) -> bool:
 
 
 def update_catalog(state: State) -> int:
-    with state.console.status(f"Baixando o catálogo do {config.CATALOG_SOURCE}..."):
+    with state.console.status("Atualizando a lista de fundos..."):
         count = state.search.update_catalog()
-    state.console.print(Text(f"  Catálogo atualizado: {count} ativos.", style="ok"))
+    state.console.print(Text(f"  Lista de fundos atualizada: {count} fundos.", style="ok"))
     return count
 
 

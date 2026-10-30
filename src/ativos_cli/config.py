@@ -11,9 +11,8 @@ from ativos_cli import __version__
 APP_NAME = "ativos-cli"
 
 # Rendimentos: avisos oficiais no FundosNet e cotações da B3. O fiis.com.br dá o CNPJ
-# de cada fundo (uma vez) e o catálogo da pesquisa.
+# de cada fundo (uma vez) e o catálogo da pesquisa. O nome aparece nos detalhes.
 SOURCE_NAME = "B3 (FundosNet)"
-CATALOG_SOURCE = "fiis.com.br"
 BASE_URL = "https://fiis.com.br"
 CATALOG_URL = f"{BASE_URL}/lista-de-fundos-imobiliarios/"
 USER_AGENT = f"ativos-cli/{__version__} (uso pessoal)"
@@ -27,6 +26,7 @@ HOST_DELAY_SECONDS = {
     "fnet.bmfbovespa.com.br": 0.1,
     "bvmf.bmfbovespa.com.br": 0.1,
     "cotacao.b3.com.br": 0.1,
+    "sistemaswebb3-listados.b3.com.br": 0.1,
 }
 DOWNLOAD_TIMEOUT_SECONDS = 20
 RETRY_TIMES = 2

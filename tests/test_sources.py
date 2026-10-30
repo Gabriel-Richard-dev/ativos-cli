@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from decimal import Decimal
 
@@ -5,7 +6,7 @@ import pytest
 
 from ativos_cli.errors import ParseError
 from ativos_cli.models import FetchStatus
-from ativos_cli.scraper import b3, fundosnet
+from ativos_cli.scraper import b3, cvm, fundosnet
 from ativos_cli.scraper.fetcher import OfficialFetcher
 from ativos_cli.scraper.http import HttpStatusError
 from tests.conftest import FIXTURES, fixture_text
@@ -161,3 +162,74 @@ class TestOfficialFetcher:
         assert [r.ticker for r in results] == ["KNCR11", "MXRF11"]
         assert results[0].status == FetchStatus.ERROR  # busca do FundosNet do KNCR11 falhou
         assert results[1].status == FetchStatus.OK
+
+
+PMLL_CNPJ = "26499833000132"
+
+
+class TestRegistry:
+    def registry(self, tmp_path, routes=None):
+        routes = routes or {
+            f"{cvm.BASE_URL}/{cvm.file_name(date.today().year)}": fixture_bytes(
+                "inf_mensal_fii_2026.zip"
+            )
+        }
+        return cvm.Registry(FakeHttp(routes), tmp_path)
+
+    def test_by_ticker_uses_isin(self, tmp_path):
+        fund = self.registry(tmp_path).by_ticker("MXRF11")
+        assert fund.cnpj == "97521225000125"
+
+    def test_renamed_fund_keeps_old_isin(self, tmp_path):
+        registry = self.registry(tmp_path)
+        assert registry.by_ticker("PMLL11") is None
+        assert registry.by_ticker("MALL11").cnpj == PMLL_CNPJ
+
+    def test_by_name_ignores_accents_and_suffixes(self, tmp_path):
+        fund = self.registry(tmp_path).by_name(
+            "PATRIA MALLS FUNDO DE INVESTIMENTO IMOBILIÁRIO - RESPONSABILIDADE LIMITADA"
+        )
+        assert fund.cnpj == PMLL_CNPJ
+
+    def test_falls_back_to_previous_year(self, tmp_path):
+        year = date.today().year
+        routes = {
+            f"{cvm.BASE_URL}/{cvm.file_name(year - 1)}": fixture_bytes("inf_mensal_fii_2026.zip")
+        }
+        assert self.registry(tmp_path, routes).by_ticker("KNCR11") is not None
+
+    def test_b3_fund_name(self):
+        payload = fixture_bytes("b3_fundos_pmll.json")
+        assert b3.parse_fund_name(payload, "PMLL11").startswith("PATRIA MALLS")
+        assert b3.parse_fund_name(payload, "MXRF11") is None
+
+
+class TestFundWithoutFiisPage:
+    def routes(self):
+        notice = 1365847
+        search = json.dumps({"data": [{"id": notice, "dataEntrega": "30/10/2026 17:00"}]}).encode()
+        xml = fixture_bytes("fnet_aviso_mxrf11.xml").replace(b"MXRF11", b"PMLL11")
+        return {
+            f"{cvm.BASE_URL}/{cvm.file_name(date.today().year)}": fixture_bytes(
+                "inf_mensal_fii_2026.zip"
+            ),
+            b3.funds_search_url("PMLL11"): fixture_bytes("b3_fundos_pmll.json"),
+            fundosnet.search_url(PMLL_CNPJ): search,
+            fundosnet.document_url(notice): xml,
+        }
+
+    def test_renamed_fund_found_by_name(self, tmp_path):
+        [result] = OfficialFetcher(tmp_path, http=FakeHttp(self.routes())).fetch(["PMLL11"])
+        assert result.status == FetchStatus.OK, result.error
+        assert result.data.name.startswith("PATRIA MALLS")
+        assert result.data.datacom == date(2026, 10, 30)
+
+    def test_identity_is_cached(self, tmp_path):
+        OfficialFetcher(tmp_path, http=FakeHttp(self.routes())).fetch(["PMLL11"])
+        http = FakeHttp(self.routes())
+        OfficialFetcher(tmp_path, http=http).fetch(["PMLL11"])
+        assert not any("fiis.com.br" in u or "cvm.gov.br" in u for u in http.requests)
+
+    def test_unknown_everywhere_is_not_found(self, tmp_path):
+        [result] = OfficialFetcher(tmp_path, http=FakeHttp(self.routes())).fetch(["ZZZZ11"])
+        assert result.status == FetchStatus.NOT_FOUND
