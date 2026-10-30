@@ -1,0 +1,81 @@
+# Roda lint e testes no Linux e no Windows a cada push e pull request.
+name: Testes
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Testes
+        run: uv run pytest -q
+
+  # Segue o manual: instala com os scripts, usa o comando e desinstala.
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      ATIVOS_DATA_DIR: ${{ github.workspace }}/../ativos-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Instalar (Linux)
+        if: runner.os == 'Linux'
+        run: ./install.sh
+
+      - name: Instalar (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\install.ps1
+
+      # Equivale a abrir um novo terminal: a pasta dos comandos do uv entra no PATH.
+      - name: Atualizar PATH
+        shell: bash
+        run: uv tool dir --bin >> "$GITHUB_PATH"
+
+      - name: Usar o comando
+        shell: bash
+        run: |
+          ativos --version
+          ativos MXRF11
+          ativos add KNCR11
+          ativos
+          ativos search maxi renda
+
+      - name: Desinstalar (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ./uninstall.sh --purge -y
+          ! command -v ativos
+
+      - name: Desinstalar (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -Purge -Yes
+          if (Get-Command ativos -ErrorAction SilentlyContinue) { throw "ativos ainda instalado" }

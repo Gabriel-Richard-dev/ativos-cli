@@ -1,0 +1,91 @@
+# Gera os executáveis e o instalador do Windows.
+# Ao criar uma tag vX.Y.Z, publica tudo numa Release do GitHub.
+# Rodado manualmente (Actions → Executar workflow), só deixa os arquivos como artefatos.
+name: Executáveis
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu mais antigo: o binário roda em distros com glibc igual ou mais nova.
+          - os: ubuntu-22.04
+            asset: ativos-linux-x86_64
+          - os: windows-latest
+            asset: ativos-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Testes
+        run: uv run pytest -q
+
+      - name: Versão
+        id: version
+        shell: bash
+        run: echo "value=$(uv version --short)" >> "$GITHUB_OUTPUT"
+
+      - name: Executável
+        run: uv run --with pyinstaller==6.22.3 python packaging/build.py
+
+      - name: Teste do executável
+        shell: bash
+        run: |
+          exe=dist/ativos
+          [ -f dist/ativos.exe ] && exe=dist/ativos.exe
+          "$exe" --version
+          ATIVOS_DATA_DIR="$RUNNER_TEMP/ativos" "$exe" MXRF11
+
+      - name: Instalador (Inno Setup)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.version.outputs.value }}" packaging\ativos.iss
+
+      # Instala em modo silencioso e confere que o `ativos` foi para o PATH do usuário.
+      - name: Teste do instalador
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\ativos-setup-*.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/CURRENTUSER" -Wait
+          $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + $env:Path
+          $env:ATIVOS_DATA_DIR = "$env:RUNNER_TEMP\ativos-setup"
+          ativos --version
+          ativos MXRF11
+
+      - name: Nomes finais
+        shell: bash
+        run: |
+          mkdir out
+          if [ -f dist/ativos.exe ]; then
+            cp dist/ativos.exe "out/${{ matrix.asset }}"
+            cp dist/ativos-setup-*.exe out/
+          else
+            cp dist/ativos "out/${{ matrix.asset }}"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/*
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*

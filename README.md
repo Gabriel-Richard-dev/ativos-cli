@@ -14,7 +14,13 @@ KNCR11   Kinea Rendimentos Imobiliários   30/09/2026   R$ 1,13      R$ 106,40  
 
 ## Instalação
 
-Passo a passo para Linux e Windows no **[manual de instalação](INSTALL.md)**. Resumo:
+**Mais fácil:** baixe o instalador do Windows (`ativos-setup-X.Y.Z.exe`) ou o
+executável do Linux na página de
+[Releases](https://github.com/Gabriel-Richard-dev/ativos-cli/releases/latest).
+Não precisa de Python.
+
+Passo a passo completo para Linux e Windows no **[manual de instalação](INSTALL.md)**.
+A partir do código:
 
 ```sh
 git clone https://github.com/Gabriel-Richard-dev/ativos-cli.git
@@ -151,6 +157,8 @@ src/ativos_cli/
 ├── repositories/      # SQLite: carteira, snapshots, catálogo
 ├── ui/                # tema, tabelas, prompts e tela da carteira
 └── utils/             # datas e valores monetários
+packaging/             # executável (PyInstaller) e instalador do Windows (Inno Setup)
+.github/workflows/     # testes no Linux e no Windows; build das Releases
 ```
 
 O Scrapy roda num subprocesso a cada coleta, porque o reactor do Twisted não pode

@@ -3,6 +3,8 @@
 O reactor do Twisted não pode ser reiniciado dentro do mesmo processo, e a carteira
 interativa atualiza os dados várias vezes. Por isso cada coleta roda em um subprocesso
 (`python -m ativos_cli.scraper.runner ...`), que devolve os itens como JSON Lines.
+No executável gerado pelo PyInstaller não há `python`: o próprio executável é chamado
+com `RUNNER_FLAG` (ver `main.run`).
 """
 
 import argparse
@@ -22,6 +24,14 @@ log = logging.getLogger(__name__)
 
 ResultCallback = Callable[[FetchResult], None]
 
+RUNNER_FLAG = "--scraper-runner"
+
+
+def collector_command() -> list[str]:
+    if getattr(sys, "frozen", False):
+        return [sys.executable, RUNNER_FLAG]
+    return [sys.executable, "-m", "ativos_cli.scraper.runner"]
+
 
 def scrapy_settings(debug: bool = False) -> dict:
     return {
@@ -39,6 +49,8 @@ def scrapy_settings(debug: bool = False) -> dict:
         "HTTPERROR_ALLOW_ALL": True,
         "COOKIES_ENABLED": False,
         "TELNETCONSOLE_ENABLED": False,
+        # Esse aviso lê o código-fonte dos spiders, que não existe no executável.
+        "WARN_ON_GENERATOR_RETURN_VALUE": False,
         "LOG_ENABLED": debug,
         "LOG_LEVEL": "DEBUG" if debug else "ERROR",
         "ITEM_PIPELINES": {"ativos_cli.scraper.pipelines.JsonLinesStdoutPipeline": 100},
@@ -99,7 +111,7 @@ class ScrapyFetcher:
         raise FetchError("O coletor não retornou o catálogo.")
 
     def _run(self, args: list[str], timeout: float):
-        cmd = [sys.executable, "-m", "ativos_cli.scraper.runner", *args]
+        cmd = [*collector_command(), *args]
         if self.debug:
             cmd.append("--debug")
         env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
