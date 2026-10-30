@@ -394,7 +394,7 @@ class AtivosApp:
             self.details = view
             self.mode = Mode.DETAILS
 
-        self.submit(f"Consultando {ticker} no {config.SOURCE_NAME}", job)
+        self.submit(f"Consultando {ticker}", job)
 
     def close_details(self) -> None:
         self.mode = Mode.LIST

@@ -8,10 +8,12 @@ Para cada ticker:
 2. Data-com, valor e pagamento: último aviso de rendimentos no FundosNet (B3).
    Avisos publicados não mudam, então cada um é lido uma vez e fica em cache; numa
    atualização com cache, sobra uma requisição (a busca) por fundo.
-3. Cotação-base: fechamento da data-com no arquivo COTAHIST da B3 (cache por dia).
-   Enquanto o arquivo do dia não sai (manhã seguinte), usa a cotação do momento da B3,
-   marcada como provisória. O Rend. % é o valor dividido pela cotação-base, cortado
-   em 4 casas (como o Status Invest).
+3. Cotação-base e Rend. %: os do card de rendimento do Status Invest com a mesma
+   data-com, para os números baterem com o site. Sem o card (Chrome indisponível,
+   página fora do ar), cotação-base é o fechamento da data-com no arquivo COTAHIST da
+   B3 (cache por dia); enquanto o arquivo do dia não sai (manhã seguinte), usa a
+   cotação do momento da B3, marcada como provisória. Aí o Rend. % é o valor dividido
+   pela cotação-base, cortado em 4 casas (como o Status Invest).
 
 Os tickers são consultados em paralelo (até `config.PARALLEL_REQUESTS`); dentro de
 cada ticker as etapas são sequenciais, porque cada uma depende da anterior.
@@ -26,7 +28,7 @@ from pathlib import Path
 from ativos_cli import config
 from ativos_cli.errors import AtivosError
 from ativos_cli.models import CatalogEntry, FetchResult, FetchStatus, FundData, FundIdentity
-from ativos_cli.scraper import b3, cvm, fundosnet
+from ativos_cli.scraper import b3, cvm, fundosnet, statusinvest
 from ativos_cli.scraper.b3 import ClosingPrices
 from ativos_cli.scraper.http import Http, HttpStatusError
 from ativos_cli.scraper.parser import parse_catalog, parse_fund_identity
@@ -64,8 +66,15 @@ class JsonCache:
 
 
 class OfficialFetcher:
-    def __init__(self, cache_dir: Path, http: Http | None = None) -> None:
+    def __init__(
+        self,
+        cache_dir: Path,
+        http: Http | None = None,
+        browser: statusinvest.Browser | None = None,
+    ) -> None:
         self.http = http or Http()
+        # Sem navegador, a cotação-base vem só da B3.
+        self.browser = browser
         self.prices = ClosingPrices(self.http, cache_dir / "cotahist")
         self.identities = JsonCache(cache_dir / "fundos.json")
         self.notices = JsonCache(cache_dir / "avisos.json")
@@ -77,13 +86,17 @@ class OfficialFetcher:
         self, tickers: list[str], on_result: ResultCallback | None = None
     ) -> list[FetchResult]:
         results: dict[str, FetchResult] = {}
-        with ThreadPoolExecutor(max_workers=config.PARALLEL_REQUESTS) as pool:
-            futures = [pool.submit(self._fetch_one, t) for t in dict.fromkeys(tickers)]
-            for future in as_completed(futures):
-                result = future.result()
-                results[result.ticker] = result
-                if on_result:
-                    on_result(result)
+        try:
+            with ThreadPoolExecutor(max_workers=config.PARALLEL_REQUESTS) as pool:
+                futures = [pool.submit(self._fetch_one, t) for t in dict.fromkeys(tickers)]
+                for future in as_completed(futures):
+                    result = future.result()
+                    results[result.ticker] = result
+                    if on_result:
+                        on_result(result)
+        finally:
+            if self.browser:
+                self.browser.close()
         return [results[t] for t in tickers]
 
     def fetch_catalog(self) -> list[CatalogEntry]:
@@ -164,6 +177,10 @@ class OfficialFetcher:
         data.rendimento = dividend.valor
         data.data_pagamento = dividend.data_pagamento
         data.source_field = f"aviso {dividend.notice_id}"
+        if card := self._status_invest_card(identity.ticker, dividend.datacom):
+            data.cotacao_base = card.cotacao_base
+            data.rendimento_pct = card.rendimento_pct
+            return data
         data.cotacao_base = self.prices.close(identity.ticker, dividend.datacom)
         if data.cotacao_base is None:
             data.cotacao_base = self._current_price(identity.ticker)
@@ -172,6 +189,20 @@ class OfficialFetcher:
             yield_percent(dividend.valor, data.cotacao_base), YIELD_PLACES
         )
         return data
+
+    def _status_invest_card(self, ticker: str, datacom) -> statusinvest.Card | None:
+        """Card do Status Invest com a mesma data-com e cotação-base, se houver."""
+        if self.browser is None:
+            return None
+        try:
+            cards = statusinvest.parse_cards(self.browser.get(statusinvest.page_url(ticker)))
+        except AtivosError as exc:
+            log.debug("Status Invest indisponível para %s: %s", ticker, exc)
+            return None
+        for card in cards:
+            if card.datacom == datacom and card.cotacao_base and card.rendimento_pct:
+                return card
+        return None
 
     def _current_price(self, ticker: str):
         """Cotação do momento na B3; sem ela, a cotação-base fica em branco por ora."""

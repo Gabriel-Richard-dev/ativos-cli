@@ -17,6 +17,7 @@ from ativos_cli.errors import AtivosError
 from ativos_cli.models import AssetView, DisplayStatus, FetchResult, FetchStatus
 from ativos_cli.repositories.asset_repository import AssetRepository
 from ativos_cli.repositories.database import connect
+from ativos_cli.scraper import statusinvest
 from ativos_cli.scraper.fetcher import OfficialFetcher
 from ativos_cli.scraper.parser import is_valid_ticker, normalize_ticker
 from ativos_cli.services import Fetcher
@@ -68,7 +69,7 @@ def today() -> date:
 
 def build_fetcher(debug: bool) -> Fetcher:
     """Ponto de troca da fonte de dados (os testes substituem por um fetcher falso)."""
-    return OfficialFetcher(config.data_dir() / "cache")
+    return OfficialFetcher(config.data_dir() / "cache", browser=statusinvest.Browser())
 
 
 @dataclass

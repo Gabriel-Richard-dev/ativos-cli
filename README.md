@@ -8,10 +8,8 @@ Acompanhe pelo terminal a **data-com**, o **rendimento por cota** e a
 $ ativos
   Ativo    Data-com     Rendimento   Rend. %   Cotação-base   Pagamento
   ──────────────────────────────────────────────────────────────────────
-  MXRF11   30/10/2026   R$ 0,095     1,0698%*  R$ 8,88*       16/11/2026
+  MXRF11   30/10/2026   R$ 0,095     1,0710%   R$ 8,87        16/11/2026
   XPML11   16/10/2026   R$ 0,92      0,8680%   R$ 105,99      23/10/2026
-
-  * cotação provisória da B3; o fechamento oficial sai na manhã seguinte.
 ```
 
 ## Instalação
@@ -92,13 +90,15 @@ com `ATIVOS_NO_INPUT=1`.
 
 ## De onde vêm os dados
 
-Os rendimentos vêm das fontes oficiais da B3:
+Os rendimentos vêm das fontes oficiais da B3; a cotação-base e o Rend. %, do
+[Status Invest](https://statusinvest.com.br), para baterem com o que o site mostra:
 
 | Campo exibido | Fonte | Observação |
 |---|---|---|
 | Data-com, Rendimento, Pagamento | Aviso aos Cotistas "Rendimentos e Amortizações" no [FundosNet](https://fnet.bmfbovespa.com.br/fnet/publico/abrirGerenciadorDocumentosCVM) | XML estruturado publicado pelo próprio fundo; sai antes de qualquer site |
-| Cotação-base | Arquivo diário de cotações da B3 (COTAHIST) | Preço de fechamento na data-com. A B3 publica o arquivo na manhã seguinte; até lá, vale a cotação do momento do [serviço de cotações da B3](https://cotacao.b3.com.br) (atraso de 15 min), marcada com `*` como provisória |
-| Rend. % | Calculado | Rendimento ÷ cotação-base × 100, cortado em 4 casas (sem arredondar); com `*` quando a cotação é provisória |
+| Cotação-base, Rend. % | Cards "Último rendimento" e "Próximo rendimento" da página do fundo no Status Invest | Usados quando a data base do card é a data-com do aviso. O site fica atrás do Cloudflare, então a página é aberta num Chrome sem janela (precisa do Google Chrome instalado) |
+| Cotação-base (reserva) | Arquivo diário de cotações da B3 (COTAHIST) | Sem o Status Invest (Chrome ausente, site fora do ar): preço de fechamento na data-com. A B3 publica o arquivo na manhã seguinte; até lá, vale a cotação do momento do [serviço de cotações da B3](https://cotacao.b3.com.br) (atraso de 15 min, inclui o after-market), marcada com `*` como provisória |
+| Rend. % (reserva) | Calculado | Rendimento ÷ cotação-base da B3 × 100, cortado em 4 casas (sem arredondar); com `*` quando a cotação é provisória |
 
 Para achar os avisos de um fundo no FundosNet é preciso o CNPJ dele, descoberto uma
 vez por fundo e guardado em cache:

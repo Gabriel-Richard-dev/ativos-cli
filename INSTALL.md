@@ -52,6 +52,9 @@ Python do sistema.
 
 Requisitos: conexão com a internet e o [Git](https://git-scm.com/) (ou baixe o projeto
 como ZIP pelo GitHub). O Python 3.11+ é instalado pelo uv se você ainda não tiver.
+Para a cotação-base sair igual à do Status Invest, tenha o
+[Google Chrome](https://www.google.com/chrome/) instalado; sem ele, o programa usa
+as cotações da B3.
 
 ---
 

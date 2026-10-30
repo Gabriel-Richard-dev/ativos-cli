@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ativos-cli"
-version = "2.2.0"
+version = "2.3.0"
 description = "CLI para acompanhar datas-com e rendimentos de FIIs (fonte: B3 / FundosNet)."
 readme = "README.md"
 license = "MIT"
@@ -23,6 +23,7 @@ dependencies = [
     "prompt_toolkit>=3.0.40",
     "pydantic>=2.6",
     "platformdirs>=4.0",
+    "selenium>=4.20",
 ]
 
 [project.scripts]

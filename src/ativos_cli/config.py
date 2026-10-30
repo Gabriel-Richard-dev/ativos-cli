@@ -10,9 +10,10 @@ from ativos_cli import __version__
 
 APP_NAME = "ativos-cli"
 
-# Rendimentos: avisos oficiais no FundosNet e cotações da B3. O fiis.com.br dá o CNPJ
+# Rendimentos: avisos oficiais no FundosNet; cotação-base do Status Invest (reserva:
+# cotações da B3). O fiis.com.br dá o CNPJ
 # de cada fundo (uma vez) e o catálogo da pesquisa. O nome aparece nos detalhes.
-SOURCE_NAME = "B3 (FundosNet)"
+SOURCE_NAME = "B3 (FundosNet) e Status Invest"
 BASE_URL = "https://fiis.com.br"
 CATALOG_URL = f"{BASE_URL}/lista-de-fundos-imobiliarios/"
 USER_AGENT = f"ativos-cli/{__version__} (uso pessoal)"

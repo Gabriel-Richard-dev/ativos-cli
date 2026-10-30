@@ -22,5 +22,7 @@ PyInstaller.__main__.run(
         f"--workpath={ROOT / 'build'}",
         f"--specpath={ROOT / 'build'}",
         "--collect-submodules=ativos_cli",
+        # Selenium Manager: binário que acha o Chrome e baixa o chromedriver.
+        "--collect-data=selenium",
     ]
 )
