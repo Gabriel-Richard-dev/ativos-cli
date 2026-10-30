@@ -13,7 +13,7 @@ AppVersion={#AppVersion}
 AppPublisher=Gabriel Richard
 AppPublisherURL=https://github.com/Gabriel-Richard-dev/ativos-cli
 DefaultDirName={autopf}\ATIVOS-CLI
-DisableProgramDirPage=yes
+DisableDirPage=yes
 DisableProgramGroupPage=yes
 ; Instala só para o usuário atual, sem pedir administrador (o usuário pode escolher).
 PrivilegesRequired=lowest
