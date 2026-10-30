@@ -24,7 +24,6 @@ OutputBaseFilename=ativos-setup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-LicenseFile=..\LICENSE
 UninstallDisplayName=ATIVOS-CLI
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

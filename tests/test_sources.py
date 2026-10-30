@@ -172,9 +172,11 @@ class FakeBrowser:
 
     def __init__(self, pages: dict[str, str]) -> None:
         self.pages = pages
+        self.requests: list[str] = []
         self.closed = False
 
     def get(self, url):
+        self.requests.append(url)
         if url not in self.pages:
             raise FetchError("Chrome indisponível para abrir o Status Invest.")
         return self.pages[url]
@@ -220,12 +222,41 @@ class TestStatusInvest:
         assert result.data.cotacao_base == Decimal("8.88")
         assert result.data.cotacao_provisoria is True
 
+    def test_card_cached_after_datacom(self, tmp_path, monkeypatch):
+        class AfterDatacom(date):
+            @classmethod
+            def today(cls):
+                return date(2026, 10, 31)
+
+        monkeypatch.setattr("ativos_cli.scraper.fetcher.date", AfterDatacom)
+        page = {statusinvest.page_url("MXRF11"): fixture_text("statusinvest_mxrf11.html")}
+        routes = mxrf_routes(cotahist_day=None)
+        OfficialFetcher(tmp_path, http=FakeHttp(routes), browser=FakeBrowser(page)).fetch(
+            ["MXRF11"]
+        )
+        browser = FakeBrowser({})
+        fetcher = OfficialFetcher(tmp_path, http=FakeHttp(routes), browser=browser)
+        [result] = fetcher.fetch(["MXRF11"])
+        assert result.data.cotacao_base == Decimal("8.87")
+        assert str(result.data.rendimento_pct) == "1.0710"
+        assert browser.requests == []
+
     def test_ignores_card_of_other_datacom(self, tmp_path):
         page = fixture_text("statusinvest_mxrf11.html").replace("30/10/2026", "28/11/2026")
         browser = FakeBrowser({statusinvest.page_url("MXRF11"): page})
+        routes = mxrf_routes(cotahist_day=None)
+        routes[b3.quote_url("MXRF11")] = fixture_bytes("b3_cotacao_mxrf11.json")
+        fetcher = OfficialFetcher(tmp_path, http=FakeHttp(routes), browser=browser)
+        [result] = fetcher.fetch(["MXRF11"])
+        assert result.data.cotacao_base == Decimal("8.88")
+        assert result.data.cotacao_provisoria is True
+
+    def test_official_close_skips_status_invest(self, tmp_path):
+        browser = FakeBrowser({})
         fetcher = OfficialFetcher(tmp_path, http=FakeHttp(mxrf_routes()), browser=browser)
         [result] = fetcher.fetch(["MXRF11"])
         assert result.data.cotacao_base == Decimal("8.94")  # COTAHIST
+        assert browser.requests == []
 
 
 class TestRegistry:

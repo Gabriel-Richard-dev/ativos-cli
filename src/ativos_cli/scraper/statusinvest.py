@@ -12,15 +12,20 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from html import unescape
+from pathlib import Path
 
 from ativos_cli.errors import FetchError
 from ativos_cli.utils.dates import parse_date
 from ativos_cli.utils.money import to_decimal
 
 log = logging.getLogger(__name__)
+# Avisos internos do Selenium (ex.: cache do chromedriver) não interessam ao usuário.
+logging.getLogger("selenium").setLevel(logging.ERROR)
 
 BASE_URL = "https://statusinvest.com.br/fundos-imobiliarios"
-PAGE_TIMEOUT_SECONDS = 30
+# Página que não carrega nesse tempo (em geral, presa na checagem do Cloudflare)
+# desliga o Status Invest até o fim da consulta: o resto usa a B3, sem esperar.
+PAGE_TIMEOUT_SECONDS = 10
 
 CARD_TITLES = ("Último rendimento", "Próximo rendimento")
 _FIELD = re.compile(
@@ -28,6 +33,10 @@ _FIELD = re.compile(
     re.S,
 )
 _VALUE = re.compile(r'<strong[^>]*class="value[^"]*"[^>]*>\s*([^<]*?)\s*</strong>', re.S)
+
+
+class FundNotFoundError(FetchError):
+    """O Status Invest não tem página para o ticker."""
 
 
 @dataclass
@@ -44,7 +53,7 @@ def page_url(ticker: str) -> str:
 
 
 def parse_cards(page: str) -> list[Card]:
-    """Cards de rendimento da página do FII (sem valor provisionado, o card não vem)."""
+    """Cards de rendimento da página do FII (sem rendimento anunciado, os campos vêm vazios)."""
     lower = page.lower()
     starts = sorted(i for t in CARD_TITLES if (i := lower.find(f">{t.lower()}</span>")) >= 0)
     # Cada card vai do seu título até o título do próximo ou o histórico de proventos.
@@ -71,11 +80,14 @@ def parse_cards(page: str) -> list[Card]:
 class Browser:
     """Chrome sem janela, aberto na primeira página pedida e reaproveitado.
 
-    O Selenium não é seguro entre threads: uma página por vez. Se o Chrome não abrir
-    (não instalado, por exemplo), as próximas chamadas falham na hora, sem tentar de novo.
+    Uma página por vez (o Selenium não é seguro entre threads). Os cookies ficam em
+    `profile_dir` entre execuções, como num navegador comum, para o Cloudflare não
+    checar de novo a cada consulta. Se o Chrome não abrir ou uma página não carregar,
+    as próximas chamadas falham na hora até `close()`.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, profile_dir: Path | None = None) -> None:
+        self.profile_dir = profile_dir
         self._driver = None
         self._broken = False
         self._lock = threading.Lock()
@@ -89,14 +101,19 @@ class Browser:
                 driver.get(url)
                 self._wait_cards(driver)
                 return driver.page_source
+            except FundNotFoundError:
+                raise
             except FetchError:
+                self._broken = True
                 raise
             except Exception as exc:
+                self._broken = True
                 log.debug("Falha ao abrir %s no Chrome", url, exc_info=True)
                 raise FetchError(f"Não foi possível abrir o Status Invest: {exc}") from exc
 
     def close(self) -> None:
         with self._lock:
+            self._broken = False
             if self._driver is not None:
                 self._driver.quit()
                 self._driver = None
@@ -114,6 +131,13 @@ class Browser:
                 "--window-size=1920,1080",
             ):
                 options.add_argument(arg)
+            if self.profile_dir:
+                options.add_argument(f"--user-data-dir={self.profile_dir}")
+            # Só o HTML importa: sem imagens e sem esperar o resto da página carregar.
+            options.page_load_strategy = "eager"
+            options.add_experimental_option(
+                "prefs", {"profile.managed_default_content_settings.images": 2}
+            )
             # O user-agent padrão do modo headless ("HeadlessChrome") é barrado.
             options.add_argument(
                 "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -129,16 +153,17 @@ class Browser:
 
     @staticmethod
     def _wait_cards(driver) -> None:
-        """Espera passar a checagem do Cloudflare e a página do fundo carregar."""
+        """Espera passar a checagem do Cloudflare e a página do fundo (ou a de erro) carregar."""
+        from selenium.common.exceptions import TimeoutException
         from selenium.webdriver.common.by import By
-        from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.ui import WebDriverWait
 
+        def loaded(d):
+            return "não encontramos" in d.title.lower() or d.find_elements(By.ID, "earning-section")
+
         try:
-            WebDriverWait(driver, PAGE_TIMEOUT_SECONDS).until(
-                EC.presence_of_element_located((By.ID, "earning-section"))
-            )
-        except Exception as exc:
-            if "não encontrada" in driver.title.lower() or "404" in driver.title:
-                raise FetchError("Fundo não encontrado no Status Invest.") from exc
+            WebDriverWait(driver, PAGE_TIMEOUT_SECONDS, poll_frequency=0.2).until(loaded)
+        except TimeoutException as exc:
             raise FetchError("A página do Status Invest não carregou.") from exc
+        if "não encontramos" in driver.title.lower():
+            raise FundNotFoundError("Fundo não encontrado no Status Invest.")

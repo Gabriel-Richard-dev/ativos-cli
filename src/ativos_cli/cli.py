@@ -69,7 +69,8 @@ def today() -> date:
 
 def build_fetcher(debug: bool) -> Fetcher:
     """Ponto de troca da fonte de dados (os testes substituem por um fetcher falso)."""
-    return OfficialFetcher(config.data_dir() / "cache", browser=statusinvest.Browser())
+    cache = config.data_dir() / "cache"
+    return OfficialFetcher(cache, browser=statusinvest.Browser(cache / "chrome"))
 
 
 @dataclass

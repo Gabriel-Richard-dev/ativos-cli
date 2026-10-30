@@ -8,12 +8,12 @@ Para cada ticker:
 2. Data-com, valor e pagamento: último aviso de rendimentos no FundosNet (B3).
    Avisos publicados não mudam, então cada um é lido uma vez e fica em cache; numa
    atualização com cache, sobra uma requisição (a busca) por fundo.
-3. Cotação-base e Rend. %: os do card de rendimento do Status Invest com a mesma
-   data-com, para os números baterem com o site. Sem o card (Chrome indisponível,
-   página fora do ar), cotação-base é o fechamento da data-com no arquivo COTAHIST da
-   B3 (cache por dia); enquanto o arquivo do dia não sai (manhã seguinte), usa a
-   cotação do momento da B3, marcada como provisória. Aí o Rend. % é o valor dividido
-   pela cotação-base, cortado em 4 casas (como o Status Invest).
+3. Cotação-base: fechamento da data-com no arquivo COTAHIST da B3 (cache por dia), o
+   mesmo que o Status Invest mostra. Enquanto o arquivo do dia não sai (manhã
+   seguinte), usa a cotação-base e o Rend. % do card de rendimento do Status Invest;
+   sem o card (Chrome indisponível, site bloqueando), a cotação do momento da B3,
+   marcada como provisória. O Rend. % é o valor dividido pela cotação-base, cortado
+   em 4 casas (como o Status Invest).
 
 Os tickers são consultados em paralelo (até `config.PARALLEL_REQUESTS`); dentro de
 cada ticker as etapas são sequenciais, porque cada uma depende da anterior.
@@ -23,6 +23,8 @@ import json
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from ativos_cli import config
@@ -78,6 +80,7 @@ class OfficialFetcher:
         self.prices = ClosingPrices(self.http, cache_dir / "cotahist")
         self.identities = JsonCache(cache_dir / "fundos.json")
         self.notices = JsonCache(cache_dir / "avisos.json")
+        self.cards = JsonCache(cache_dir / "statusinvest.json")
         self.registry = cvm.Registry(self.http, cache_dir / "cvm")
 
     # --- Fetcher ---------------------------------------------------------------
@@ -177,12 +180,13 @@ class OfficialFetcher:
         data.rendimento = dividend.valor
         data.data_pagamento = dividend.data_pagamento
         data.source_field = f"aviso {dividend.notice_id}"
-        if card := self._status_invest_card(identity.ticker, dividend.datacom):
-            data.cotacao_base = card.cotacao_base
-            data.rendimento_pct = card.rendimento_pct
-            return data
         data.cotacao_base = self.prices.close(identity.ticker, dividend.datacom)
         if data.cotacao_base is None:
+            # Fechamento oficial ainda não publicado: o Status Invest já tem o do pregão.
+            if card := self._status_invest_card(identity.ticker, dividend.datacom):
+                data.cotacao_base = card.cotacao_base
+                data.rendimento_pct = card.rendimento_pct
+                return data
             data.cotacao_base = self._current_price(identity.ticker)
             data.cotacao_provisoria = data.cotacao_base is not None
         data.rendimento_pct = truncate(
@@ -190,8 +194,21 @@ class OfficialFetcher:
         )
         return data
 
-    def _status_invest_card(self, ticker: str, datacom) -> statusinvest.Card | None:
-        """Card do Status Invest com a mesma data-com e cotação-base, se houver."""
+    def _status_invest_card(self, ticker: str, datacom: date) -> statusinvest.Card | None:
+        """Card do Status Invest com a mesma data-com e cotação-base, se houver.
+
+        Passada a data-com, a cotação-base dela não muda: o card fica em cache e o Chrome
+        só abre para rendimentos novos (ou do dia).
+        """
+        key = f"{ticker}:{datacom.isoformat()}"
+        if cached := self.cards.get(key):
+            return statusinvest.Card(
+                rendimento=None,
+                rendimento_pct=Decimal(cached["rendimento_pct"]),
+                cotacao_base=Decimal(cached["cotacao_base"]),
+                datacom=datacom,
+                data_pagamento=None,
+            )
         if self.browser is None:
             return None
         try:
@@ -201,6 +218,14 @@ class OfficialFetcher:
             return None
         for card in cards:
             if card.datacom == datacom and card.cotacao_base and card.rendimento_pct:
+                if datacom < date.today():
+                    self.cards.set(
+                        key,
+                        {
+                            "cotacao_base": str(card.cotacao_base),
+                            "rendimento_pct": str(card.rendimento_pct),
+                        },
+                    )
                 return card
         return None
 
