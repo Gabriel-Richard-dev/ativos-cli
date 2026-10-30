@@ -1,0 +1,161 @@
+# ATIVOS-CLI
+
+Acompanhe pelo terminal a **data-base** (data com), o **rendimento por cota** e a
+**cotação-base** dos seus Fundos Imobiliários (FIIs). Os dados vêm do
+[fiis.com.br](https://fiis.com.br) e ficam salvos localmente em SQLite.
+
+```text
+$ ativos
+Ativo    Nome                             Data-base    Rendimento   Cotação-base   Pagamento
+─────────────────────────────────────────────────────────────────────────────────────────────
+MXRF11   Maxi Renda                       30/09/2026   R$ 0,10      R$ 9,17        15/10/2026
+KNCR11   Kinea Rendimentos Imobiliários   30/09/2026   R$ 1,13      R$ 106,40      14/10/2026
+```
+
+## Instalação
+
+Passo a passo para Linux e Windows no **[manual de instalação](INSTALL.md)**. Resumo:
+
+```sh
+git clone https://github.com/Gabriel-Richard-dev/ativos-cli.git
+cd ativos-cli
+./install.sh                                              # Linux
+powershell -ExecutionPolicy Bypass -File .\install.ps1    # Windows (PowerShell)
+```
+
+Os scripts usam o [uv](https://docs.astral.sh/uv/) (ou o pipx, se não houver uv).
+Depois, abra um novo terminal e execute `ativos --help`.
+
+Se você vai mexer no código, instale em modo editável para o comando acompanhar as
+mudanças sem reinstalar: `uv tool install --editable --force .`
+
+## Desinstalação
+
+**Linux**
+
+```sh
+./uninstall.sh              # remove o comando e mantém carteira e histórico
+./uninstall.sh --purge      # remove também os dados locais (pede confirmação)
+```
+
+**Windows (PowerShell)**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1          # mantém os dados
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -Purge   # apaga também os dados
+```
+
+Os scripts detectam se o comando foi instalado com uv ou pipx. Para apagar os dados
+sem confirmação, acrescente `-y` (Linux) ou `-Yes` (Windows).
+
+## Uso
+
+```sh
+ativos                       # atualiza a carteira e mostra a tabela
+ativos MXRF11                # consulta um ativo
+ativos MXRF11 --detalhes     # consulta com todos os detalhes
+ativos mxrf                  # sem ticker completo, pesquisa (o mesmo que `ativos search mxrf`)
+ativos search "maxi renda"   # pesquisa por nome ou ticker aproximado
+ativos add KNCR11            # adiciona à carteira
+ativos remove KNCR11         # remove da carteira (mantém o histórico)
+ativos remove KNCR11 --purge # remove e apaga o histórico
+ativos refresh               # o mesmo que `ativos`, saindo com código 1 se algo falhar
+ativos refresh MXRF11        # atualiza só um ativo
+ativos history MXRF11        # histórico de consultas gravadas
+ativos catalog update        # baixa a lista de fundos usada na pesquisa
+ativos catalog status
+```
+
+Todos os comandos só imprimem o resultado no terminal, numa tabela simples. Em
+terminais com menos de 84 colunas, as colunas Nome e Pagamento são omitidas.
+
+### Em scripts
+
+`show`, `refresh` e `search` aceitam `--json`. O `refresh` sai com código 1 se algum
+ativo falhar. O único prompt é a confirmação do `remove`; pule com `-y` ou desligue
+com `ATIVOS_NO_INPUT=1`.
+
+## De onde vêm os dados
+
+A página de cada fundo no fiis.com.br (`https://fiis.com.br/{ticker}/`) traz um objeto
+`dataLayer_content` com os dados do fundo. O ATIVOS-CLI usa:
+
+| Campo exibido | Campo do site | Observação |
+|---|---|---|
+| Data-base | `pr_database` / `ur_data_base` | Data com do rendimento |
+| Rendimento | `pr_valor` / `ur_valor` | Valor por cota, em `Decimal` |
+| Cotação-base | `pr_cotacaobase` / `ur_cotacao_base` | Preço de referência do rendimento, **não** a cotação atual |
+| Pagamento | `pr_datapagamento` / `ur_data_pagamento` | Exibido em terminais largos e nos detalhes |
+| Cotação atual | `valor` | Só nos detalhes |
+
+`pr_*` é o próximo rendimento anunciado e `ur_*` é o último pago. Vale o grupo
+com a data-base mais recente. Se um grupo tiver valor sem data-base, ele é ignorado
+e o campo aparece como `N/D`, porque o rendimento não pode ser associado à data
+com segurança.
+
+O catálogo de pesquisa vem do índice de busca que o site embute em todas as páginas.
+
+**Boas práticas de acesso:** o coletor (Scrapy) respeita o `robots.txt`, faz uma
+requisição por vez com intervalo de 1 segundo, tenta de novo no máximo 2 vezes e se
+identifica como `ativos-cli`. Só consulta o site quando você pede. O Status Invest,
+fonte prevista originalmente, bloqueia acesso automatizado (Cloudflare) e por isso
+não é usado.
+
+## Cache e falhas
+
+- Toda consulta é gravada no histórico, com sucesso ou falha.
+- Uma falha nunca apaga o último dado válido. A tabela mostra o dado anterior e,
+  abaixo dela, o ativo que falhou com o motivo.
+- Na consulta de um ativo, dados lidos do banco vêm com um aviso de quando foram
+  coletados (e se têm mais de 24 horas).
+- Remover da carteira mantém o histórico, exceto com `--purge`.
+
+O banco fica no diretório de dados do usuário:
+
+- Linux: `~/.local/share/ativos-cli/ativos.db`
+- Windows: `%LOCALAPPDATA%\ativos-cli\ativos.db`
+
+Use `ATIVOS_DATA_DIR` para escolher outro local.
+
+## Solução de problemas
+
+| Sintoma | O que fazer |
+|---|---|
+| `ativos: command not found` | Abra um novo terminal, ou rode `uv tool update-shell` / `pipx ensurepath` |
+| "Catálogo ainda não foi baixado" | `ativos catalog update` |
+| "Estrutura da página mudou" | O site mudou o layout. Os dados em cache continuam disponíveis; abra uma issue |
+| "Limite de requisições atingido" | Espere alguns minutos e tente de novo |
+| Cores estranhas ou ausentes | Defina `NO_COLOR=1` para saída sem cores |
+| Quer ver o erro completo | `ativos --debug ...` (ou `ATIVOS_DEBUG=1`) |
+
+## Desenvolvimento
+
+```sh
+uv sync                    # cria o ambiente com as dependências de dev
+uv run ativos              # roda a partir do código
+uv run pytest              # testes offline (fixtures HTML, sem internet)
+uv run pytest -m network   # testes de integração com o site real
+uv run ruff check . && uv run ruff format .
+```
+
+Estrutura:
+
+```text
+src/ativos_cli/
+├── main.py            # entrada do comando (atalho `ativos TICKER`)
+├── cli.py             # comandos Typer
+├── config.py          # caminhos, URLs, limites de acesso
+├── models/            # modelos Pydantic
+├── services/          # regras de negócio, cache e pesquisa
+├── scraper/           # parser, spiders Scrapy e runner (subprocesso)
+├── repositories/      # SQLite: carteira, snapshots, catálogo
+├── ui/                # tema, tabelas, prompts e tela da carteira
+└── utils/             # datas e valores monetários
+```
+
+O Scrapy roda num subprocesso a cada coleta, porque o reactor do Twisted não pode
+ser reiniciado no mesmo processo.
+
+## Licença
+
+MIT
