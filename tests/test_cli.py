@@ -61,7 +61,7 @@ def test_show_one_row_table(run):
     assert "30/09/2026" in result.output
     assert "R$ 0,10" in result.output
     assert "R$ 9,17" in result.output
-    assert "1,0905125408942%" in result.output
+    assert "1,090%" in result.output
     assert "CONSULTA" not in result.output
     rows = [line for line in result.output.splitlines() if "R$" in line]
     assert len(rows) == 1
@@ -72,7 +72,7 @@ def test_show_json(run):
     data = json.loads(result.output)
     assert data["datacom"] == "2026-09-30"
     assert data["rendimento"] == "0.1"
-    assert data["rendimento_pct"] == "1.0905125408942"
+    assert data["rendimento_pct"] == "1.090"
     assert data["status"] == "updated"
 
 

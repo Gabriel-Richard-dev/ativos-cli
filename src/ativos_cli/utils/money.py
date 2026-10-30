@@ -1,6 +1,6 @@
 """Valores monetários sempre como Decimal."""
 
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 
 NA = "N/D"
 
@@ -42,8 +42,15 @@ def format_brl(value: Decimal | None) -> str:
     return f"R$ {text}"
 
 
+def truncate(value: Decimal | None, places: int) -> Decimal | None:
+    """Corta (sem arredondar) em `places` casas decimais: 1,0909 -> 1,090."""
+    if value is None:
+        return None
+    return value.quantize(Decimal(1).scaleb(-places), rounding=ROUND_DOWN)
+
+
 def format_percent(value: Decimal | None) -> str:
-    """Formata como "1,0905125408942%", com todas as casas que o valor tiver."""
+    """Formata como "1,090%"."""
     if value is None:
         return NA
     return f"{value:f}%".replace(".", ",")

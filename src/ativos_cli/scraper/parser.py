@@ -23,9 +23,10 @@ from typing import Any
 from ativos_cli.errors import ParseError
 from ativos_cli.models import CatalogEntry, FundData
 from ativos_cli.utils.dates import parse_date
-from ativos_cli.utils.money import to_decimal
+from ativos_cli.utils.money import to_decimal, truncate
 
 _DATALAYER_MARKER = "var dataLayer_content ="
+YIELD_PLACES = 3
 _SEARCH_ISLAND = re.compile(r'data-island="search"\s+data-props="([^"]*)"')
 _TICKER = re.compile(r"^[A-Z]{4}\d{2}B?$")
 
@@ -101,7 +102,8 @@ def parse_fund_page(page: str, expected_ticker: str | None = None) -> FundData:
         data.datacom = datacom
         data.rendimento = rendimento
         data.cotacao_base = to_decimal(base)
-        data.rendimento_pct = to_decimal(pct)
+        # O site manda até 14 casas; guardamos só 3, cortadas (sem arredondar).
+        data.rendimento_pct = truncate(to_decimal(pct), YIELD_PLACES)
         data.data_pagamento = parse_date(pay)
         data.source_field = label
     return data

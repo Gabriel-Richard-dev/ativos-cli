@@ -22,7 +22,7 @@ WIDE = 84
 NARROW = 64
 # Tabela simples: recuo da borda e largura mínima para mostrar o pagamento.
 INDENT = 2
-PLAIN_WIDE = 86
+PLAIN_WIDE = 76
 
 
 def header(title: str, subtitle: str, width: int) -> Panel:
@@ -109,9 +109,7 @@ def plain_table(views: list[AssetView], width: int) -> Padding:
     table.add_column("Ativo", no_wrap=True)
     table.add_column("Data-com", no_wrap=True)
     table.add_column("Rendimento", no_wrap=True)
-    # O percentual vem com todas as casas do site; se faltar espaço, quebra a linha
-    # em vez de cortar dígitos.
-    table.add_column("Rend. %", overflow="fold")
+    table.add_column("Rend. %", no_wrap=True)
     table.add_column("Cotação-base", no_wrap=True)
     if show_payment:
         table.add_column("Pagamento", no_wrap=True)
