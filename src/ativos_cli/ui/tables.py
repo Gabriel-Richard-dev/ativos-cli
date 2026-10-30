@@ -2,6 +2,7 @@
 
 from rich import box
 from rich.console import Group, RenderableType
+from rich.padding import Padding
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -10,7 +11,7 @@ from ativos_cli import config
 from ativos_cli.models import AssetView, DisplayStatus, FetchStatus
 from ativos_cli.services.search_service import SearchHit
 from ativos_cli.utils.dates import format_date, format_datetime
-from ativos_cli.utils.money import format_brl
+from ativos_cli.utils.money import format_brl, format_percent, yield_percent
 
 # Rótulo do botão clicável na tabela de resultados (ver ui/app.py).
 ADD_BUTTON = " + Adicionar "
@@ -19,6 +20,9 @@ IN_WALLET = "✓ Na carteira"
 # Abaixo destas larguras, colunas secundárias somem ou ficam compactas.
 WIDE = 84
 NARROW = 64
+# Tabela simples: recuo da borda e largura mínima para mostrar o pagamento.
+INDENT = 2
+PLAIN_WIDE = 76
 
 
 def header(title: str, subtitle: str, width: int) -> Panel:
@@ -94,29 +98,33 @@ def assets_table(
     return table
 
 
-def plain_table(views: list[AssetView], width: int) -> Table:
+def plain_table(views: list[AssetView], width: int) -> Padding:
     """Tabela enxuta, uma linha por ativo, para imprimir direto no terminal.
 
-    Em terminais estreitos, a coluna de pagamento some para caber o essencial.
+    Fica recuada da borda do terminal. Em terminais estreitos, a coluna de pagamento
+    some para caber o essencial.
     """
-    show_payment = width >= NARROW
+    show_payment = width >= PLAIN_WIDE
     table = Table(box=box.SIMPLE_HEAD, header_style="bold", pad_edge=False, show_edge=False)
-    for column in ("Ativo", "Data-com", "Rendimento", "Cotação-base"):
+    for column in ("Ativo", "Data-com", "Rendimento", "Rend. %", "Cotação-base"):
         table.add_column(column, no_wrap=True)
     if show_payment:
         table.add_column("Pagamento", no_wrap=True)
     for view in views:
         snap = view.valid
+        rendimento = snap.rendimento if snap else None
+        cotacao = snap.cotacao_base if snap else None
         row = [
             view.ticker,
             format_date(snap.datacom if snap else None),
-            format_brl(snap.rendimento if snap else None),
-            format_brl(snap.cotacao_base if snap else None),
+            format_brl(rendimento),
+            format_percent(yield_percent(rendimento, cotacao)),
+            format_brl(cotacao),
         ]
         if show_payment:
             row.append(format_date(snap.data_pagamento if snap else None))
         table.add_row(*row)
-    return table
+    return Padding(table, (0, 0, 0, INDENT), expand=False)
 
 
 def asset_title(view: AssetView) -> Text:

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ativos-cli"
-version = "1.0.0"
+version = "1.1.0"
 description = "CLI para acompanhar datas-com e rendimentos de FIIs (fonte: fiis.com.br)."
 readme = "README.md"
 license = "MIT"

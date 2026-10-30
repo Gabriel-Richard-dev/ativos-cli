@@ -40,3 +40,17 @@ def format_brl(value: Decimal | None) -> str:
     text = f"{value:,.{places}f}"
     text = text.replace(",", "_").replace(".", ",").replace("_", ".")
     return f"R$ {text}"
+
+
+def yield_percent(rendimento: Decimal | None, cotacao_base: Decimal | None) -> Decimal | None:
+    """Rendimento em % da cotação-base (dividend yield do período)."""
+    if rendimento is None or not cotacao_base:
+        return None
+    return rendimento / cotacao_base * 100
+
+
+def format_percent(value: Decimal | None) -> str:
+    """Formata como "1,09%"."""
+    if value is None:
+        return NA
+    return f"{value:.2f}%".replace(".", ",")

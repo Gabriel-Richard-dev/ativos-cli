@@ -12,7 +12,7 @@ from ativos_cli.scraper.parser import (
     parse_fund_page,
 )
 from ativos_cli.utils.dates import format_date, parse_date
-from ativos_cli.utils.money import format_brl, to_decimal
+from ativos_cli.utils.money import format_brl, format_percent, to_decimal, yield_percent
 from tests.conftest import fixture_text
 
 
@@ -198,3 +198,10 @@ class TestNormalization:
     def test_format_date(self):
         assert format_date(date(2026, 10, 30)) == "30/10/2026"
         assert format_date(None) == "N/D"
+
+
+def test_yield_percent():
+    assert format_percent(yield_percent(Decimal("0.10"), Decimal("9.17"))) == "1,09%"
+    assert yield_percent(Decimal("0.10"), None) is None
+    assert yield_percent(Decimal("0.10"), Decimal("0")) is None
+    assert format_percent(None) == "N/D"

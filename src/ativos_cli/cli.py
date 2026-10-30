@@ -30,7 +30,7 @@ from ativos_cli.ui.tables import (
 )
 from ativos_cli.ui.theme import make_console
 from ativos_cli.utils.dates import format_date, format_datetime
-from ativos_cli.utils.money import format_brl
+from ativos_cli.utils.money import format_brl, yield_percent
 
 log = logging.getLogger(__name__)
 
@@ -142,12 +142,14 @@ def main(
 
 def view_to_dict(view: AssetView) -> dict:
     snap = view.valid
+    pct = yield_percent(snap.rendimento, snap.cotacao_base) if snap else None
     return {
         "ticker": view.ticker,
         "nome": view.name,
         "datacom": snap.datacom.isoformat() if snap and snap.datacom else None,
         "rendimento": str(snap.rendimento) if snap and snap.rendimento is not None else None,
         "cotacao_base": str(snap.cotacao_base) if snap and snap.cotacao_base is not None else None,
+        "rendimento_pct": str(round(pct, 4)) if pct is not None else None,
         "data_pagamento": (
             snap.data_pagamento.isoformat() if snap and snap.data_pagamento else None
         ),
@@ -299,7 +301,7 @@ def print_summary(state: State, summary) -> None:
     console.print(plain_table(summary.views, console.width))
     for view in summary.failed:
         error = view.last_error or "sem dados"
-        console.print(Text(f"{view.ticker}: {error}", style="fail"))
+        console.print(Text(f"  {view.ticker}: {error}", style="fail"))
 
 
 @app.command("history")
@@ -335,7 +337,9 @@ def history_command(
 
 def open_wallet(state: State) -> None:
     if not state.service.repo.wallet_tickers():
-        state.console.print(Text("Sua carteira está vazia. Use: ativos add TICKER", style="muted"))
+        state.console.print(
+            Text("  Sua carteira está vazia. Use: ativos add TICKER", style="muted")
+        )
         return
     print_summary(state, refresh_with_progress(state, None))
 
@@ -416,9 +420,9 @@ def run_search(state: State, term: str, as_json: bool = False) -> None:
         return
 
     if not hits:
-        console.print(Text(f'Nenhum ativo encontrado para "{term}".', style="muted"))
+        console.print(Text(f'  Nenhum ativo encontrado para "{term}".', style="muted"))
         if is_valid_ticker(normalize_ticker(term)):
-            console.print(Text(f"Tente consultar direto: ativos {term.upper()}", style="muted"))
+            console.print(Text(f"  Tente consultar direto: ativos {term.upper()}", style="muted"))
         return
     console.print(plain_table([views[h.entry.ticker] for h in hits], console.width))
 
