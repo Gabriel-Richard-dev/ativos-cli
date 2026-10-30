@@ -1,17 +1,9 @@
 """Interpretação das páginas do fiis.com.br.
 
-A página de cada fundo embute um objeto JavaScript `dataLayer_content` cujo caminho
-`pagePostTerms.meta` traz os dados do fundo. Campos usados:
-
-- `ur_data_base` / `ur_valor` / `ur_cotacao_base` / `ur_data_pagamento`: último rendimento.
-- `pr_database` / `pr_valor` / `pr_cotacaobase` / `pr_datapagamento`: próximo rendimento.
-- `valor` / `datacotacao`: cotação atual (exibida apenas nos detalhes, nunca como cotação-base).
-
-A data-com é a "data com" do rendimento. A cotação-base é o preço de referência que o site
-associa ao rendimento (usado no cálculo do yield), distinto da cotação atual.
-
-O catálogo de fundos vem do índice de busca `data-island="search"`, presente no cabeçalho
-de todas as páginas.
+O fiis.com.br é usado só para o que as fontes oficiais não dão de forma simples:
+- o nome e o CNPJ de cada fundo, a partir do objeto `dataLayer_content` da página do
+  fundo (`pagePostTerms.meta`), para achar os avisos dele no FundosNet;
+- o catálogo da pesquisa, do índice `data-island="search"` presente em todas as páginas.
 """
 
 import html
@@ -21,28 +13,11 @@ from decimal import Decimal
 from typing import Any
 
 from ativos_cli.errors import ParseError
-from ativos_cli.models import CatalogEntry, FundData
-from ativos_cli.utils.dates import parse_date
-from ativos_cli.utils.money import to_decimal, truncate
+from ativos_cli.models import CatalogEntry, FundIdentity
 
 _DATALAYER_MARKER = "var dataLayer_content ="
-YIELD_PLACES = 3
 _SEARCH_ISLAND = re.compile(r'data-island="search"\s+data-props="([^"]*)"')
 _TICKER = re.compile(r"^[A-Z]{4}\d{2}B?$")
-
-# (rótulo, campo da data-com, campo do valor, campo da cotação-base, campo do pagamento,
-#  campo do rendimento em %)
-_DIVIDEND_GROUPS = (
-    ("pr_*", "pr_database", "pr_valor", "pr_cotacaobase", "pr_datapagamento", "pr_rendimento"),
-    (
-        "ur_*",
-        "ur_data_base",
-        "ur_valor",
-        "ur_cotacao_base",
-        "ur_data_pagamento",
-        "ur_rendimento",
-    ),
-)
 
 
 def normalize_ticker(value: str) -> str:
@@ -69,44 +44,16 @@ def extract_meta(page: str) -> dict[str, Any]:
     return meta
 
 
-def parse_fund_page(page: str, expected_ticker: str | None = None) -> FundData:
+def parse_fund_identity(page: str, expected_ticker: str | None = None) -> FundIdentity:
     meta = extract_meta(page)
     ticker = normalize_ticker(str(meta["ticker"]))
     if expected_ticker and ticker != normalize_ticker(expected_ticker):
         raise ParseError(f"A página retornou outro ativo ({ticker}).")
-
-    data = FundData(
-        ticker=ticker,
-        name=_clean_name(meta.get("nome_pregao") or meta.get("fundname") or meta.get("name")),
-        cotacao_atual=to_decimal(meta.get("valor")),
-        data_cotacao=parse_date(meta.get("datacotacao")),
-    )
-
-    candidates = []
-    for label, f_date, f_value, f_base, f_pay, f_pct in _DIVIDEND_GROUPS:
-        datacom = parse_date(meta.get(f_date))
-        rendimento = to_decimal(meta.get(f_value))
-        if datacom is None and rendimento is None:
-            continue
-        if datacom is None or rendimento is None:
-            # Sem o par data-com + valor não há como associar o rendimento com segurança.
-            data.notes.append(f"Campos {label} incompletos; ignorados por ambiguidade.")
-            continue
-        candidates.append(
-            (datacom, label, rendimento, meta.get(f_base), meta.get(f_pay), meta.get(f_pct))
-        )
-
-    if candidates:
-        # O grupo com a data-com mais recente vence; em empate, "pr_*" (listado primeiro).
-        datacom, label, rendimento, base, pay, pct = max(candidates, key=lambda c: c[0])
-        data.datacom = datacom
-        data.rendimento = rendimento
-        data.cotacao_base = to_decimal(base)
-        # O site manda até 14 casas; guardamos só 3, cortadas (sem arredondar).
-        data.rendimento_pct = truncate(to_decimal(pct), YIELD_PLACES)
-        data.data_pagamento = parse_date(pay)
-        data.source_field = label
-    return data
+    cnpj = re.sub(r"\D", "", str(meta.get("cnpj") or ""))
+    if len(cnpj) != 14:
+        raise ParseError(f"CNPJ de {ticker} não encontrado no fiis.com.br.")
+    name = _clean_name(meta.get("nome_pregao") or meta.get("fundname") or meta.get("name"))
+    return FundIdentity(ticker=ticker, name=name, cnpj=cnpj)
 
 
 def parse_catalog(page: str) -> list[CatalogEntry]:

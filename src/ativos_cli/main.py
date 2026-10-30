@@ -4,7 +4,6 @@ import sys
 
 from ativos_cli.cli import app
 from ativos_cli.scraper.parser import is_valid_ticker, normalize_ticker
-from ativos_cli.scraper.runner import RUNNER_FLAG
 
 COMMANDS = {"show", "search", "add", "remove", "refresh", "history", "catalog"}
 
@@ -22,10 +21,6 @@ def rewrite_args(args: list[str]) -> list[str]:
 
 
 def run() -> None:
-    if sys.argv[1:2] == [RUNNER_FLAG]:
-        from ativos_cli.scraper.runner import main
-
-        sys.exit(main(sys.argv[2:]))
     app(args=rewrite_args(sys.argv[1:]), prog_name="ativos")
 
 

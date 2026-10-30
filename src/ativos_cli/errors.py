@@ -13,7 +13,7 @@ class InvalidTickerError(AtivosError):
 
 class AssetNotFoundError(AtivosError):
     def __init__(self, ticker: str) -> None:
-        super().__init__(f"Ativo {ticker} não encontrado no fiis.com.br.")
+        super().__init__(f"Ativo {ticker} não encontrado.")
         self.ticker = ticker
 
 

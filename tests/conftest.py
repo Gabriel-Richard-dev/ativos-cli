@@ -1,4 +1,5 @@
-from datetime import timedelta
+from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,7 @@ from ativos_cli import config
 from ativos_cli.models import CatalogEntry, FetchResult, FetchStatus, FundData
 from ativos_cli.repositories.asset_repository import AssetRepository
 from ativos_cli.repositories.database import connect
-from ativos_cli.scraper.parser import parse_catalog, parse_fund_page
+from ativos_cli.scraper.parser import parse_catalog
 from ativos_cli.services.asset_service import AssetService
 from ativos_cli.services.search_service import SearchService
 from ativos_cli.utils.dates import now_utc
@@ -49,9 +50,8 @@ class FakeFetcher:
         self.catalog_calls = 0
         self.catalog_error: Exception | None = None
 
-    def set_fixture(self, ticker: str, fixture: str) -> None:
-        data = parse_fund_page(fixture_text(fixture), expected_ticker=ticker)
-        self.results[ticker] = ok_result(ticker, data)
+    def set_data(self, ticker: str, **fields) -> None:
+        self.results[ticker] = ok_result(ticker, FundData(ticker=ticker, **fields))
 
     def fetch(self, tickers, on_result=None):
         self.calls.append(list(tickers))
@@ -76,8 +76,27 @@ class FakeFetcher:
 @pytest.fixture
 def fetcher() -> FakeFetcher:
     f = FakeFetcher()
-    f.set_fixture("MXRF11", "fiis_mxrf11.html")
-    f.set_fixture("KNCR11", "fiis_kncr11.html")
+    # Valores do aviso de setembro/2026 de cada fundo.
+    f.set_data(
+        "MXRF11",
+        name="Maxi Renda",
+        datacom=date(2026, 9, 30),
+        rendimento=Decimal("0.1"),
+        cotacao_base=Decimal("9.17"),
+        rendimento_pct=Decimal("1.090"),
+        data_pagamento=date(2026, 10, 15),
+        source_field="aviso 1335757",
+    )
+    f.set_data(
+        "KNCR11",
+        name="Kinea Rendimentos Imobiliários",
+        datacom=date(2026, 9, 30),
+        rendimento=Decimal("1.13"),
+        cotacao_base=Decimal("106.4"),
+        rendimento_pct=Decimal("1.062"),
+        data_pagamento=date(2026, 10, 14),
+        source_field="aviso 1335000",
+    )
     f.catalog = parse_catalog(fixture_text("fiis_lista.html"))
     return f
 

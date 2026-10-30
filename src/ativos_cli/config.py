@@ -10,16 +10,23 @@ from ativos_cli import __version__
 
 APP_NAME = "ativos-cli"
 
-SOURCE_NAME = "fiis.com.br"
+# Rendimentos: avisos oficiais no FundosNet e cotações da B3. O fiis.com.br dá o CNPJ
+# de cada fundo (uma vez) e o catálogo da pesquisa.
+SOURCE_NAME = "B3 (FundosNet)"
+CATALOG_SOURCE = "fiis.com.br"
 BASE_URL = "https://fiis.com.br"
 CATALOG_URL = f"{BASE_URL}/lista-de-fundos-imobiliarios/"
 USER_AGENT = f"ativos-cli/{__version__} (uso pessoal)"
 
-# Limites de acesso ao site: até PARALLEL_REQUESTS buscas ao mesmo tempo, com um
-# intervalo mínimo entre elas. O AutoThrottle do Scrapy reduz o ritmo se o site
-# ficar lento.
+# Limites de acesso: até PARALLEL_REQUESTS ativos consultados ao mesmo tempo e um
+# intervalo mínimo entre requisições ao mesmo site.
 PARALLEL_REQUESTS = 4
 DOWNLOAD_DELAY_SECONDS = 0.25
+# Os servidores públicos da B3 (FundosNet e cotações) aguentam um ritmo maior.
+HOST_DELAY_SECONDS = {
+    "fnet.bmfbovespa.com.br": 0.1,
+    "bvmf.bmfbovespa.com.br": 0.1,
+}
 DOWNLOAD_TIMEOUT_SECONDS = 20
 RETRY_TIMES = 2
 

@@ -90,31 +90,27 @@ com `ATIVOS_NO_INPUT=1`.
 
 ## De onde vêm os dados
 
-A página de cada fundo no fiis.com.br (`https://fiis.com.br/{ticker}/`) traz um objeto
-`dataLayer_content` com os dados do fundo. O ATIVOS-CLI usa:
+Os rendimentos vêm das fontes oficiais da B3:
 
-| Campo exibido | Campo do site | Observação |
+| Campo exibido | Fonte | Observação |
 |---|---|---|
-| Data-com | `pr_database` / `ur_data_base` | Data com do rendimento |
-| Rendimento | `pr_valor` / `ur_valor` | Valor por cota, em `Decimal` |
-| Cotação-base | `pr_cotacaobase` / `ur_cotacao_base` | Preço de referência do rendimento, **não** a cotação atual |
-| Pagamento | `pr_datapagamento` / `ur_data_pagamento` | Exibido em terminais largos e nos detalhes |
-| Rend. % | `pr_rendimento` / `ur_rendimento` | Rendimento em % da cotação-base, cortado em 3 casas na coleta |
-| Cotação atual | `valor` | Só nos detalhes |
+| Data-com, Rendimento, Pagamento | Aviso aos Cotistas "Rendimentos e Amortizações" no [FundosNet](https://fnet.bmfbovespa.com.br/fnet/publico/abrirGerenciadorDocumentosCVM) | XML estruturado publicado pelo próprio fundo; sai antes de qualquer site |
+| Cotação-base | Arquivo diário de cotações da B3 (COTAHIST) | Preço de fechamento na data-com; a B3 publica na manhã seguinte, então até lá aparece `—` |
+| Rend. % | Calculado | Rendimento ÷ cotação-base × 100, cortado em 3 casas (sem arredondar) |
 
-`pr_*` é o próximo rendimento anunciado e `ur_*` é o último pago. Vale o grupo
-com a data-com mais recente. Se um grupo tiver valor sem data-com, ele é ignorado
-e o campo aparece como `N/D`, porque o rendimento não pode ser associado à data
-com segurança.
+O [fiis.com.br](https://fiis.com.br) só é usado para descobrir o nome e o CNPJ de cada
+fundo (uma vez por fundo; o CNPJ localiza os avisos no FundosNet) e para a lista de
+fundos da pesquisa.
 
-O catálogo de pesquisa vem do índice de busca que o site embute em todas as páginas.
+**Cache e desempenho:** CNPJ, avisos já lidos (um aviso publicado não muda) e os
+arquivos de cotações ficam em cache no diretório de dados (`cache/`). Numa atualização
+com cache, sobra uma requisição por fundo (a busca dos avisos). Até 4 fundos são
+consultados em paralelo.
 
-**Boas práticas de acesso:** o coletor (Scrapy) respeita o `robots.txt`, faz até 4
-requisições em paralelo com intervalo mínimo de 0,25 segundo (o AutoThrottle reduz o
-ritmo se o site ficar lento), tenta de novo no máximo 2 vezes e se
-identifica como `ativos-cli`. Só consulta o site quando você pede. O Status Invest,
-fonte prevista originalmente, bloqueia acesso automatizado (Cloudflare) e por isso
-não é usado.
+**Boas práticas de acesso:** intervalo mínimo entre requisições ao mesmo site (0,25 s
+no fiis.com.br e 0,1 s nos servidores da B3), no máximo 2 novas tentativas em caso de
+falha, e identificação como `ativos-cli`. Só consulta quando você pede. O Status
+Invest bloqueia acesso automatizado (Cloudflare) e por isso não é usado.
 
 ## Cache e falhas
 
@@ -162,7 +158,7 @@ src/ativos_cli/
 ├── config.py          # caminhos, URLs, limites de acesso
 ├── models/            # modelos Pydantic
 ├── services/          # regras de negócio, cache e pesquisa
-├── scraper/           # parser, spiders Scrapy e runner (subprocesso)
+├── scraper/           # FundosNet, cotações da B3, fiis.com.br (CNPJ e catálogo) e HTTP
 ├── repositories/      # SQLite: carteira, snapshots, catálogo
 ├── ui/                # tema, tabelas, prompts e tela da carteira
 └── utils/             # datas e valores monetários
@@ -170,8 +166,6 @@ packaging/             # executável (PyInstaller) e instalador do Windows (Inno
 .github/workflows/     # testes no Linux e no Windows; build das Releases
 ```
 
-O Scrapy roda num subprocesso a cada coleta, porque o reactor do Twisted não pode
-ser reiniciado no mesmo processo.
 
 ## Licença
 

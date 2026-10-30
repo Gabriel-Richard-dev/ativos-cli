@@ -17,8 +17,8 @@ from ativos_cli.errors import AtivosError
 from ativos_cli.models import AssetView, DisplayStatus, FetchResult, FetchStatus
 from ativos_cli.repositories.asset_repository import AssetRepository
 from ativos_cli.repositories.database import connect
+from ativos_cli.scraper.fetcher import OfficialFetcher
 from ativos_cli.scraper.parser import is_valid_ticker, normalize_ticker
-from ativos_cli.scraper.runner import ScrapyFetcher
 from ativos_cli.services import Fetcher
 from ativos_cli.services.asset_service import AssetService
 from ativos_cli.services.search_service import SearchService
@@ -68,7 +68,7 @@ def today() -> date:
 
 def build_fetcher(debug: bool) -> Fetcher:
     """Ponto de troca da fonte de dados (os testes substituem por um fetcher falso)."""
-    return ScrapyFetcher(debug=debug)
+    return OfficialFetcher(config.data_dir() / "cache")
 
 
 @dataclass
@@ -176,7 +176,7 @@ def print_json(state: State, payload) -> None:
 def show_asset(state: State, raw_ticker: str, details: bool = False) -> AssetView:
     console = state.console
     ticker = normalize_ticker(raw_ticker)
-    with console.status(f"Consultando {ticker} no {config.SOURCE_NAME}..."):
+    with console.status(f"Consultando {ticker} na {config.SOURCE_NAME}..."):
         view = state.service.lookup(ticker)
 
     console.print(plain_table([view], console.width, today()))
@@ -272,7 +272,7 @@ def refresh_with_progress(state: State, tickers: list[str] | None):
         transient=True,
     )
     with progress:
-        task = progress.add_task(f"Consultando o {config.SOURCE_NAME}", total=total)
+        task = progress.add_task(f"Consultando a {config.SOURCE_NAME}", total=total)
 
         def advance(result: FetchResult) -> None:
             mark = "ok" if result.status == FetchStatus.OK else "falha"
@@ -361,7 +361,7 @@ def refresh_catalog_for_search(state: State) -> bool:
     """
     console = state.console
     try:
-        with console.status(f"Pesquisando no {config.SOURCE_NAME}..."):
+        with console.status(f"Pesquisando no {config.CATALOG_SOURCE}..."):
             state.search.update_catalog()
         return True
     except AtivosError as exc:
@@ -375,7 +375,7 @@ def refresh_catalog_for_search(state: State) -> bool:
 
 
 def update_catalog(state: State) -> int:
-    with state.console.status(f"Baixando o catálogo do {config.SOURCE_NAME}..."):
+    with state.console.status(f"Baixando o catálogo do {config.CATALOG_SOURCE}..."):
         count = state.search.update_catalog()
     state.console.print(Text(f"  Catálogo atualizado: {count} ativos.", style="ok"))
     return count

@@ -125,13 +125,14 @@ def plain_table(views: list[AssetView], width: int, today: date) -> Padding:
             continue
         row = [
             view.ticker,
-            format_date(snap.datacom if snap else None),
-            format_brl(snap.rendimento if snap else None),
-            format_percent(snap.rendimento_pct if snap else None),
-            format_brl(snap.cotacao_base if snap else None),
+            format_date(snap.datacom),
+            format_brl(snap.rendimento),
+            # Sem o fechamento da data-com (a B3 publica na manhã seguinte): traço.
+            format_percent(snap.rendimento_pct) if snap.rendimento_pct is not None else DASH,
+            format_brl(snap.cotacao_base) if snap.cotacao_base is not None else DASH,
         ]
         if show_payment:
-            row.append(format_date(snap.data_pagamento if snap else None))
+            row.append(format_date(snap.data_pagamento))
         table.add_row(*row)
     return Padding(table, (0, 0, 0, INDENT), expand=False)
 
@@ -229,13 +230,13 @@ def details_panel(view: AssetView, width: int, flat: bool = False) -> Panel:
     grid.add_row("Data-com", Text(format_date(snap.datacom if snap else None), style="datacom"))
     grid.add_row("Rendimento por cota", format_brl(snap.rendimento if snap else None))
     grid.add_row("Cotação-base", format_brl(snap.cotacao_base if snap else None))
+    grid.add_row("Rend. %", format_percent(snap.rendimento_pct if snap else None))
     grid.add_row("Data de pagamento", format_date(snap.data_pagamento if snap else None))
-    grid.add_row("Cotação atual", format_brl(snap.cotacao_atual if snap else None))
     grid.add_row("", "")
     grid.add_row("Última consulta válida", format_datetime(snap.fetched_at if snap else None))
     origin = config.SOURCE_NAME
     if snap and snap.source_field:
-        origin += f" (campos {snap.source_field})"
+        origin += f", {snap.source_field}"
     grid.add_row("Origem dos dados", origin)
     grid.add_row("URL", (snap or attempt).source_url if (snap or attempt) else "N/D")
 

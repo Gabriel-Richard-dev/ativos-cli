@@ -9,7 +9,7 @@ from ativos_cli.scraper.parser import (
     is_valid_ticker,
     normalize_ticker,
     parse_catalog,
-    parse_fund_page,
+    parse_fund_identity,
 )
 from ativos_cli.utils.dates import format_date, parse_date
 from ativos_cli.utils.money import format_brl, format_percent, to_decimal, truncate
@@ -22,93 +22,28 @@ def page_with(meta: dict) -> str:
     return f"<html><script>var dataLayer_content = {json.dumps(layer)};</script></html>"
 
 
-class TestFundPage:
-    def test_mxrf11_priority_fields(self):
-        data = parse_fund_page(fixture_text("fiis_mxrf11.html"), expected_ticker="MXRF11")
-        assert data.ticker == "MXRF11"
-        assert data.name == "Maxi Renda"
-        assert data.datacom == date(2026, 9, 30)
-        assert data.rendimento == Decimal("0.1")
-        assert data.cotacao_base == Decimal("9.17")
+class TestFundIdentity:
+    def test_mxrf11(self):
+        identity = parse_fund_identity(fixture_text("fiis_mxrf11.html"), expected_ticker="MXRF11")
+        assert identity.ticker == "MXRF11"
+        assert identity.name == "Maxi Renda"
+        assert identity.cnpj == "97521225000125"
 
-    def test_datacom_is_not_payment_date(self):
-        data = parse_fund_page(fixture_text("fiis_mxrf11.html"))
-        assert data.data_pagamento == date(2026, 10, 15)
-        assert data.datacom != data.data_pagamento
+    def test_ticker_is_normalized(self):
+        identity = parse_fund_identity(fixture_text("fiis_kncr11.html"), expected_ticker="kncr11")
+        assert identity.cnpj == "16706958000132"
 
-    def test_cotacao_base_is_not_current_price(self):
-        data = parse_fund_page(fixture_text("fiis_mxrf11.html"))
-        assert data.cotacao_atual == Decimal("8.98")
-        assert data.cotacao_base != data.cotacao_atual
-
-    def test_kncr11(self):
-        data = parse_fund_page(fixture_text("fiis_kncr11.html"), expected_ticker="kncr11")
-        assert data.name == "Kinea Rendimentos Imobiliários"
-        assert (data.datacom, data.rendimento, data.cotacao_base) == (
-            date(2026, 9, 30),
-            Decimal("1.13"),
-            Decimal("106.4"),
-        )
-
-    def test_values_keep_decimal_precision(self):
-        data = parse_fund_page(page_with({"ur_data_base": "2026-01-30", "ur_valor": 0.0825}))
-        assert data.rendimento == Decimal("0.0825")
-        assert isinstance(data.rendimento, Decimal)
-
-    def test_next_dividend_wins_when_more_recent(self):
-        data = parse_fund_page(
-            page_with(
-                {
-                    "ur_data_base": "2026-09-30T00:00:00",
-                    "ur_valor": 0.1,
-                    "ur_cotacao_base": 9.17,
-                    "pr_database": "2026-10-30T00:00:00",
-                    "pr_valor": 0.11,
-                    "pr_cotacaobase": 9.01,
-                }
-            )
-        )
-        assert data.datacom == date(2026, 10, 30)
-        assert data.rendimento == Decimal("0.11")
-        assert data.cotacao_base == Decimal("9.01")
-        assert data.source_field == "pr_*"
-
-    def test_last_dividend_used_when_next_is_older(self):
-        data = parse_fund_page(
-            page_with(
-                {
-                    "ur_data_base": "2026-09-30",
-                    "ur_valor": 0.1,
-                    "pr_database": "2026-08-29",
-                    "pr_valor": 0.12,
-                }
-            )
-        )
-        assert data.datacom == date(2026, 9, 30)
-        assert data.source_field == "ur_*"
-
-    def test_value_without_date_is_ambiguous(self):
-        data = parse_fund_page(page_with({"ur_valor": 0.1, "ur_cotacao_base": 9.0}))
-        assert data.datacom is None
-        assert data.rendimento is None
-        assert data.notes
-
-    def test_missing_dividend_fields(self):
-        data = parse_fund_page(page_with({"nome_pregao": "Teste"}))
-        assert data.name == "Teste"
-        assert (data.datacom, data.rendimento, data.cotacao_base) == (None, None, None)
-
-    def test_zeroed_date_is_missing(self):
-        data = parse_fund_page(page_with({"ur_data_base": "0001-01-01T00:00:00", "ur_valor": 0}))
-        assert data.datacom is None
+    def test_missing_cnpj_is_error(self):
+        with pytest.raises(ParseError, match="CNPJ"):
+            parse_fund_identity(page_with({"nome_pregao": "Teste"}))
 
     def test_other_ticker_is_error(self):
         with pytest.raises(ParseError, match="outro ativo"):
-            parse_fund_page(fixture_text("fiis_mxrf11.html"), expected_ticker="KNCR11")
+            parse_fund_identity(fixture_text("fiis_mxrf11.html"), expected_ticker="KNCR11")
 
     def test_not_found_page_has_no_fund_data(self):
         with pytest.raises(ParseError):
-            parse_fund_page(fixture_text("fiis_404.html"))
+            parse_fund_identity(fixture_text("fiis_404.html"))
 
     @pytest.mark.parametrize(
         "html",
@@ -120,7 +55,7 @@ class TestFundPage:
     )
     def test_structure_change(self, html):
         with pytest.raises(ParseError, match="Estrutura"):
-            parse_fund_page(html)
+            parse_fund_identity(html)
 
 
 class TestCatalog:
@@ -205,8 +140,3 @@ def test_truncate_cuts_without_rounding():
     assert format_percent(truncate(Decimal("0.5"), 3)) == "0,500%"
     assert truncate(None, 3) is None
     assert format_percent(None) == "N/D"
-
-
-def test_fund_page_brings_site_yield():
-    data = parse_fund_page(fixture_text("fiis_mxrf11.html"))
-    assert str(data.rendimento_pct) == "1.090"  # site: 1.0905125408942

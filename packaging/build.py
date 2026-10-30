@@ -21,13 +21,6 @@ PyInstaller.__main__.run(
         f"--distpath={ROOT / 'dist'}",
         f"--workpath={ROOT / 'build'}",
         f"--specpath={ROOT / 'build'}",
-        # O Scrapy carrega middlewares, extensões e o reactor do Twisted por nome,
-        # então o PyInstaller não os enxerga sozinho.
-        "--collect-all=scrapy",
-        "--collect-submodules=twisted",
         "--collect-submodules=ativos_cli",
-        "--collect-data=tldextract",
-        # O Scrapy lê a versão das dependências pelos metadados dos pacotes.
-        "--recursive-copy-metadata=scrapy",
     ]
 )

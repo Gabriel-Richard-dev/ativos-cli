@@ -7,6 +7,14 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 
+class FundIdentity(BaseModel):
+    """Nome e CNPJ de um fundo (o CNPJ localiza os avisos dele no FundosNet)."""
+
+    ticker: str
+    name: str | None = None
+    cnpj: str
+
+
 class FundData(BaseModel):
     """Campos extraídos da página de um FII."""
 
@@ -20,7 +28,7 @@ class FundData(BaseModel):
     cotacao_base: Decimal | None = None
     cotacao_atual: Decimal | None = None
     data_cotacao: date | None = None
-    # Grupo de campos da fonte usado para o rendimento ("pr_*" ou "ur_*").
+    # Documento de origem do rendimento (ex.: "aviso 1365016" do FundosNet).
     source_field: str | None = None
     notes: list[str] = Field(default_factory=list)
 

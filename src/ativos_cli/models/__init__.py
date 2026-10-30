@@ -5,6 +5,7 @@ from ativos_cli.models.asset import (
     FetchResult,
     FetchStatus,
     FundData,
+    FundIdentity,
     Snapshot,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "FetchResult",
     "FetchStatus",
     "FundData",
+    "FundIdentity",
     "Snapshot",
 ]
