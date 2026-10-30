@@ -26,6 +26,8 @@ class FundData(BaseModel):
     # Rendimento em % da cotação-base, como o site informa (sem arredondar).
     rendimento_pct: Decimal | None = None
     cotacao_base: Decimal | None = None
+    # Cotação-base do dia, antes do fechamento oficial da B3 sair (manhã seguinte).
+    cotacao_provisoria: bool = False
     cotacao_atual: Decimal | None = None
     data_cotacao: date | None = None
     # Documento de origem do rendimento (ex.: "aviso 1365016" do FundosNet).
@@ -69,6 +71,7 @@ class Snapshot(BaseModel):
     rendimento: Decimal | None = None
     rendimento_pct: Decimal | None = None
     cotacao_base: Decimal | None = None
+    cotacao_provisoria: bool = False
     cotacao_atual: Decimal | None = None
     source_field: str | None = None
     error: str | None = None

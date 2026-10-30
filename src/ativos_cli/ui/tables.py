@@ -25,6 +25,7 @@ NARROW = 64
 # Tabela simples: recuo da borda e largura mínima para mostrar o pagamento.
 INDENT = 2
 DASH = "—"
+PROVISIONAL_NOTE = "* cotação provisória da B3; o fechamento oficial sai na manhã seguinte."
 PLAIN_WIDE = 76
 
 
@@ -101,7 +102,7 @@ def assets_table(
     return table
 
 
-def plain_table(views: list[AssetView], width: int, today: date) -> Padding:
+def plain_table(views: list[AssetView], width: int, today: date) -> RenderableType:
     """Tabela enxuta, uma linha por ativo, para imprimir direto no terminal.
 
     Só mostra rendimentos com data-com no mês de `today` em diante; os de meses
@@ -118,6 +119,7 @@ def plain_table(views: list[AssetView], width: int, today: date) -> Padding:
     if show_payment:
         table.add_column("Pagamento", no_wrap=True)
     month_start = today.replace(day=1)
+    provisional = False
     for view in views:
         snap = view.valid
         if snap is None or snap.datacom is None or snap.datacom < month_start:
@@ -127,14 +129,26 @@ def plain_table(views: list[AssetView], width: int, today: date) -> Padding:
             view.ticker,
             format_date(snap.datacom),
             format_brl(snap.rendimento),
-            # Sem o fechamento da data-com (a B3 publica na manhã seguinte): traço.
-            format_percent(snap.rendimento_pct) if snap.rendimento_pct is not None else DASH,
-            format_brl(snap.cotacao_base) if snap.cotacao_base is not None else DASH,
+            # Sem cotação nenhuma ainda: traço. Cotação do dia, antes do fechamento
+            # oficial da B3: marcada com asterisco.
+            marked(format_percent, snap.rendimento_pct, snap.cotacao_provisoria),
+            marked(format_brl, snap.cotacao_base, snap.cotacao_provisoria),
         ]
+        provisional = provisional or (snap.cotacao_provisoria and snap.cotacao_base is not None)
         if show_payment:
             row.append(format_date(snap.data_pagamento))
         table.add_row(*row)
-    return Padding(table, (0, 0, 0, INDENT), expand=False)
+    body = Padding(table, (0, 0, 0, INDENT), expand=False)
+    if not provisional:
+        return body
+    note = Text(f"\n{' ' * INDENT}{PROVISIONAL_NOTE}", style="muted")
+    return Group(body, note)
+
+
+def marked(fmt, value, provisional: bool) -> str:
+    if value is None:
+        return DASH
+    return f"{fmt(value)}*" if provisional else fmt(value)
 
 
 def asset_title(view: AssetView) -> Text:
@@ -229,7 +243,10 @@ def details_panel(view: AssetView, width: int, flat: bool = False) -> Panel:
     grid.add_row("Nome", view.name or "N/D")
     grid.add_row("Data-com", Text(format_date(snap.datacom if snap else None), style="datacom"))
     grid.add_row("Rendimento por cota", format_brl(snap.rendimento if snap else None))
-    grid.add_row("Cotação-base", format_brl(snap.cotacao_base if snap else None))
+    base = format_brl(snap.cotacao_base if snap else None)
+    if snap and snap.cotacao_provisoria:
+        base += " (provisória: o fechamento oficial da B3 sai na manhã seguinte)"
+    grid.add_row("Cotação-base", base)
     grid.add_row("Rend. %", format_percent(snap.rendimento_pct if snap else None))
     grid.add_row("Data de pagamento", format_date(snap.data_pagamento if snap else None))
     grid.add_row("", "")

@@ -6,7 +6,9 @@ Para cada ticker:
    Avisos publicados não mudam, então cada um é lido uma vez e fica em cache; numa
    atualização com cache, sobra uma requisição (a busca) por fundo.
 3. Cotação-base: fechamento da data-com no arquivo COTAHIST da B3 (cache por dia).
-   O Rend. % é o valor dividido pela cotação-base, cortado em 3 casas.
+   Enquanto o arquivo do dia não sai (manhã seguinte), usa a cotação do momento da B3,
+   marcada como provisória. O Rend. % é o valor dividido pela cotação-base, cortado
+   em 3 casas.
 
 Os tickers são consultados em paralelo (até `config.PARALLEL_REQUESTS`); dentro de
 cada ticker as etapas são sequenciais, porque cada uma depende da anterior.
@@ -21,7 +23,7 @@ from pathlib import Path
 from ativos_cli import config
 from ativos_cli.errors import AtivosError
 from ativos_cli.models import CatalogEntry, FetchResult, FetchStatus, FundData, FundIdentity
-from ativos_cli.scraper import fundosnet
+from ativos_cli.scraper import b3, fundosnet
 from ativos_cli.scraper.b3 import ClosingPrices
 from ativos_cli.scraper.http import Http, HttpStatusError
 from ativos_cli.scraper.parser import parse_catalog, parse_fund_identity
@@ -142,10 +144,21 @@ class OfficialFetcher:
         data.data_pagamento = dividend.data_pagamento
         data.source_field = f"aviso {dividend.notice_id}"
         data.cotacao_base = self.prices.close(identity.ticker, dividend.datacom)
+        if data.cotacao_base is None:
+            data.cotacao_base = self._current_price(identity.ticker)
+            data.cotacao_provisoria = data.cotacao_base is not None
         data.rendimento_pct = truncate(
             yield_percent(dividend.valor, data.cotacao_base), YIELD_PLACES
         )
         return data
+
+    def _current_price(self, ticker: str):
+        """Cotação do momento na B3; sem ela, a cotação-base fica em branco por ora."""
+        try:
+            return b3.parse_quote(self.http.get(b3.quote_url(ticker)), ticker)
+        except AtivosError as exc:
+            log.debug("Cotação provisória de %s indisponível: %s", ticker, exc)
+            return None
 
     def _latest_dividend(self, identity: FundIdentity) -> fundosnet.Dividend | None:
         notices = fundosnet.parse_search(

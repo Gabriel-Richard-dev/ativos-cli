@@ -26,6 +26,7 @@ DOWNLOAD_DELAY_SECONDS = 0.25
 HOST_DELAY_SECONDS = {
     "fnet.bmfbovespa.com.br": 0.1,
     "bvmf.bmfbovespa.com.br": 0.1,
+    "cotacao.b3.com.br": 0.1,
 }
 DOWNLOAD_TIMEOUT_SECONDS = 20
 RETRY_TIMES = 2

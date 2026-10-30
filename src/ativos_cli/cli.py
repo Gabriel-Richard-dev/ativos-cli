@@ -157,6 +157,7 @@ def view_to_dict(view: AssetView) -> dict:
         "rendimento_pct": (
             str(snap.rendimento_pct) if snap and snap.rendimento_pct is not None else None
         ),
+        "cotacao_provisoria": bool(snap and snap.cotacao_provisoria),
         "data_pagamento": (
             snap.data_pagamento.isoformat() if snap and snap.data_pagamento else None
         ),

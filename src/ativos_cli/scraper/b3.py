@@ -1,10 +1,13 @@
-"""Cotações de fechamento da B3, a partir do arquivo diário COTAHIST.
+"""Cotações da B3.
 
-O arquivo do pregão sai na manhã seguinte e fica em cache no diretório de dados,
-então cada dia é baixado uma vez só.
+- Fechamento oficial: arquivo diário COTAHIST. O arquivo do pregão sai na manhã
+  seguinte e fica em cache no diretório de dados, então cada dia é baixado uma vez.
+- Cotação do momento (com atraso de 15 minutos): serviço público de cotações da B3,
+  usado como cotação-base provisória enquanto o COTAHIST do dia não sai.
 """
 
 import io
+import json
 import threading
 import zipfile
 from datetime import date
@@ -15,6 +18,7 @@ from ativos_cli.errors import ParseError
 from ativos_cli.scraper.http import Http, HttpStatusError
 
 BASE_URL = "https://bvmf.bmfbovespa.com.br/InstDados/SerHist"
+QUOTE_URL = "https://cotacao.b3.com.br/mds/api/v1/instrumentQuotation"
 # Mercado à vista: é onde as cotas de FII são negociadas.
 SPOT_MARKET = "010"
 
@@ -40,6 +44,26 @@ def parse_cotahist(payload: bytes) -> dict[str, Decimal]:
             continue
         closes[line[12:24].strip()] = Decimal(int(line[108:121])) / 100
     return closes
+
+
+def quote_url(ticker: str) -> str:
+    return f"{QUOTE_URL}/{ticker}"
+
+
+def parse_quote(payload: bytes, ticker: str) -> Decimal | None:
+    """Último preço (`curPrc`) do ticker no mercado à vista, ou None sem negócios."""
+    try:
+        trades = json.loads(payload, parse_float=Decimal).get("Trad") or []
+    except (ValueError, AttributeError) as exc:
+        raise ParseError("Resposta inesperada do serviço de cotações da B3.") from exc
+    for trade in trades:
+        security = trade.get("scty") or {}
+        if security.get("symb") != ticker or (security.get("mkt") or {}).get("nm") != "Vista":
+            continue
+        price = (security.get("SctyQtn") or {}).get("curPrc")
+        if isinstance(price, (int, Decimal)) and price > 0:
+            return Decimal(price)
+    return None
 
 
 class ClosingPrices:

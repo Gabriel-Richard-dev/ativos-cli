@@ -95,8 +95,8 @@ Os rendimentos vêm das fontes oficiais da B3:
 | Campo exibido | Fonte | Observação |
 |---|---|---|
 | Data-com, Rendimento, Pagamento | Aviso aos Cotistas "Rendimentos e Amortizações" no [FundosNet](https://fnet.bmfbovespa.com.br/fnet/publico/abrirGerenciadorDocumentosCVM) | XML estruturado publicado pelo próprio fundo; sai antes de qualquer site |
-| Cotação-base | Arquivo diário de cotações da B3 (COTAHIST) | Preço de fechamento na data-com; a B3 publica na manhã seguinte, então até lá aparece `—` |
-| Rend. % | Calculado | Rendimento ÷ cotação-base × 100, cortado em 3 casas (sem arredondar) |
+| Cotação-base | Arquivo diário de cotações da B3 (COTAHIST) | Preço de fechamento na data-com. A B3 publica o arquivo na manhã seguinte; até lá, vale a cotação do momento do [serviço de cotações da B3](https://cotacao.b3.com.br) (atraso de 15 min), marcada com `*` como provisória |
+| Rend. % | Calculado | Rendimento ÷ cotação-base × 100, cortado em 3 casas (sem arredondar); com `*` quando a cotação é provisória |
 
 O [fiis.com.br](https://fiis.com.br) só é usado para descobrir o nome e o CNPJ de cada
 fundo (uma vez por fundo; o CNPJ localiza os avisos no FundosNet) e para a lista de

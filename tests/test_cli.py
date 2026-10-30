@@ -80,6 +80,21 @@ def test_previous_month_datacom_shows_dashes(run, monkeypatch):
     assert row.split() == ["MXRF11", "—", "—", "—", "—", "—"]
 
 
+def test_provisional_price_is_marked(run, fetcher):
+    fetcher.results["MXRF11"].data.cotacao_provisoria = True
+    result = run("MXRF11")
+    assert "R$ 9,17*" in result.output
+    assert "1,090%*" in result.output
+    assert "cotação provisória" in result.output
+    assert run("MXRF11", "--json").output.count('"cotacao_provisoria": true') == 1
+
+
+def test_official_price_has_no_mark(run):
+    result = run("MXRF11")
+    assert "*" not in result.output
+    assert "provisória" not in result.output
+
+
 def test_show_json(run):
     result = run("MXRF11", "--json")
     data = json.loads(result.output)

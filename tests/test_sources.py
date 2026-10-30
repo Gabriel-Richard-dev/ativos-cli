@@ -85,6 +85,14 @@ class TestCotahist:
         with pytest.raises(ParseError):
             b3.parse_cotahist(b"nao e zip")
 
+    def test_parse_quote(self):
+        payload = fixture_bytes("b3_cotacao_mxrf11.json")
+        assert b3.parse_quote(payload, "MXRF11") == Decimal("8.88")
+        assert b3.parse_quote(payload, "KNCR11") is None
+        assert b3.parse_quote(b'{"Trad": []}', "MXRF11") is None
+        with pytest.raises(ParseError):
+            b3.parse_quote(b"<html>", "MXRF11")
+
 
 class TestOfficialFetcher:
     def test_fetch_combines_sources(self, tmp_path):
@@ -127,6 +135,20 @@ class TestOfficialFetcher:
         assert result.data.rendimento == Decimal("0.095")
         assert result.data.cotacao_base is None
         assert result.data.rendimento_pct is None
+
+    def test_provisional_price_before_official_close(self, tmp_path):
+        routes = mxrf_routes(cotahist_day=None)
+        routes[b3.quote_url("MXRF11")] = fixture_bytes("b3_cotacao_mxrf11.json")
+        [result] = OfficialFetcher(tmp_path, http=FakeHttp(routes)).fetch(["MXRF11"])
+        assert result.data.cotacao_base == Decimal("8.88")
+        assert result.data.cotacao_provisoria is True
+        assert str(result.data.rendimento_pct) == "1.069"  # 0,095 / 8,88 = 1,0698...
+
+    def test_official_close_skips_quote(self, tmp_path):
+        http = FakeHttp(mxrf_routes())
+        [result] = OfficialFetcher(tmp_path, http=http).fetch(["MXRF11"])
+        assert result.data.cotacao_provisoria is False
+        assert b3.quote_url("MXRF11") not in http.requests
 
     def test_unknown_ticker(self, tmp_path):
         [result] = OfficialFetcher(tmp_path, http=FakeHttp({})).fetch(["ZZZZ11"])

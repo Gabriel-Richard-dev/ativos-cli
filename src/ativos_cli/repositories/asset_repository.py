@@ -97,8 +97,9 @@ class AssetRepository:
             cur = conn.execute(
                 """INSERT INTO asset_snapshots
                    (asset_id, status, datacom, data_pagamento, rendimento, rendimento_pct,
-                    cotacao_base, cotacao_atual, source_field, source_url, fetched_at, error)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    cotacao_base, cotacao_provisoria, cotacao_atual, source_field, source_url,
+                    fetched_at, error)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     asset_id,
                     result.status.value,
@@ -107,6 +108,7 @@ class AssetRepository:
                     _dec(data.rendimento) if data else None,
                     _dec(data.rendimento_pct) if data else None,
                     _dec(data.cotacao_base) if data else None,
+                    int(data.cotacao_provisoria) if data else 0,
                     _dec(data.cotacao_atual) if data else None,
                     data.source_field if data else None,
                     result.source_url,
@@ -161,6 +163,7 @@ class AssetRepository:
             rendimento=dec("rendimento"),
             rendimento_pct=dec("rendimento_pct"),
             cotacao_base=dec("cotacao_base"),
+            cotacao_provisoria=bool(row["cotacao_provisoria"]),
             cotacao_atual=dec("cotacao_atual"),
             source_field=row["source_field"],
             error=row["error"],
