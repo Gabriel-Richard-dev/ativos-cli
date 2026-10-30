@@ -56,7 +56,7 @@ def wallet_renderable(
     numbered: bool = False,
 ) -> RenderableType:
     parts: list[RenderableType] = [
-        header("MINHA CARTEIRA", "Acompanhamento de rendimentos e datas-base", width),
+        header("MINHA CARTEIRA", "Acompanhamento de rendimentos e datas-com", width),
         Text(),
         summary_line(views, refresh_label),
         Text(),

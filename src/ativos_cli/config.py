@@ -20,7 +20,7 @@ DOWNLOAD_DELAY_SECONDS = 1.0
 DOWNLOAD_TIMEOUT_SECONDS = 20
 RETRY_TIMES = 2
 
-# A pesquisa consulta a página de cada resultado para mostrar a data-base.
+# A pesquisa consulta a página de cada resultado para mostrar a data-com.
 SEARCH_LIMIT = 10
 # Na pesquisa, ativos consultados há menos tempo que isso usam o dado salvo.
 SEARCH_FRESH_FOR = timedelta(hours=1)

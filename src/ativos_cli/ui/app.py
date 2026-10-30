@@ -54,7 +54,7 @@ from ativos_cli.ui.theme import render_ansi
 log = logging.getLogger(__name__)
 
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-# Espera a digitação parar antes de consultar a data-base dos resultados no site.
+# Espera a digitação parar antes de consultar a data-com dos resultados no site.
 QUOTE_DELAY_SECONDS = 0.4
 PLACEHOLDER = "Buscar fundo por nome ou ticker..."
 
@@ -198,7 +198,7 @@ class AtivosApp:
         self.wallet_loaded = True
         self._rerank()
         if self.searching:
-            # Busca vinda da linha de comando: a data-base dos resultados vem antes de tudo.
+            # Busca vinda da linha de comando: a data-com dos resultados vem antes de tudo.
             self._quotes_job(self.quote_generation)
         # A lista de fundos vem antes da atualização da carteira: a busca fica pronta logo.
         self._ensure_catalog()
@@ -298,7 +298,7 @@ class AtivosApp:
         self._invalidate()
 
     def _schedule_quotes(self) -> None:
-        """Agenda a consulta da data-base dos primeiros resultados quando a digitação para."""
+        """Agenda a consulta da data-com dos primeiros resultados quando a digitação para."""
         self.quote_generation += 1
         generation = self.quote_generation
         if self.quote_timer:
@@ -307,7 +307,7 @@ class AtivosApp:
             return
 
         def submit() -> None:
-            self.submit("Consultando datas-base", lambda: self._quotes_job(generation))
+            self.submit("Consultando datas-com", lambda: self._quotes_job(generation))
 
         if self.quote_delay <= 0:
             submit()
@@ -336,7 +336,7 @@ class AtivosApp:
         self._invalidate()
 
         def on_result(result: FetchResult) -> None:
-            # Mostra cada data-base assim que chega, sem esperar os demais.
+            # Mostra cada data-com assim que chega, sem esperar os demais.
             ok = result.status == FetchStatus.OK
             self.search_views[result.ticker] = self.service.view(result.ticker, updated_now=ok)
             self.quotes_pending.discard(result.ticker)

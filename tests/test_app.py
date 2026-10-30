@@ -53,7 +53,7 @@ def test_live_search_and_add(make_app, search):
     assert app.searching
     assert app.hits[0].entry.ticker == "MXRF11"
     assert "Maxi Renda" in body(app)
-    assert "30/09/2026" in body(app)  # data-base consultada no site para os resultados
+    assert "30/09/2026" in body(app)  # data-com consultada no site para os resultados
 
     app.open_details()
     assert app.mode == Mode.DETAILS

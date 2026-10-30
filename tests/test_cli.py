@@ -57,7 +57,7 @@ def test_help_lists_commands(run):
 def test_show_one_row_table(run):
     result = run("MXRF11")
     assert result.exit_code == 0, result.output
-    assert "Maxi Renda" in result.output
+    assert "Maxi Renda" not in result.output
     assert "30/09/2026" in result.output
     assert "R$ 0,10" in result.output
     assert "R$ 9,17" in result.output
@@ -130,7 +130,7 @@ def test_wallet_single_table(run):
     assert result.exit_code == 0, result.output
     assert "MXRF11" in result.output
     assert "KNCR11" in result.output
-    assert result.output.count("Data-base") == 1
+    assert result.output.count("Data-com") == 1
 
 
 def test_wallet_marks_failures(run, fetcher):
@@ -150,7 +150,7 @@ def test_wallet_empty(run):
 def test_narrow_terminal_keeps_priority_columns(run):
     run("add", "MXRF11")
     result = run(width=60)
-    assert "Data-base" in result.output
+    assert "Data-com" in result.output
     assert "Cotação-base" in result.output
     assert "Pagamento" not in result.output
     assert all(len(line) <= 60 for line in result.output.splitlines())
@@ -196,11 +196,11 @@ def test_search_offline_without_saved_catalog(run, fetcher):
 def test_search(run):
     result = run("search", "maxi", "renda")
     assert "MXRF11" in result.output
-    assert "Data-base" in result.output
+    assert "Data-com" in result.output
     assert "30/09/2026" in result.output
     data = json.loads(run("search", "kncr", "--json").output)
     assert data[0]["ticker"] == "KNCR11"
-    assert data[0]["data_base"]
+    assert data[0]["datacom"]
 
 
 def test_catalog_status(run):

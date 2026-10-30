@@ -1,15 +1,15 @@
 # ATIVOS-CLI
 
-Acompanhe pelo terminal a **data-base** (data com), o **rendimento por cota** e a
+Acompanhe pelo terminal a **data-com**, o **rendimento por cota** e a
 **cotação-base** dos seus Fundos Imobiliários (FIIs). Os dados vêm do
 [fiis.com.br](https://fiis.com.br) e ficam salvos localmente em SQLite.
 
 ```text
 $ ativos
-Ativo    Nome                             Data-base    Rendimento   Cotação-base   Pagamento
-─────────────────────────────────────────────────────────────────────────────────────────────
-MXRF11   Maxi Renda                       30/09/2026   R$ 0,10      R$ 9,17        15/10/2026
-KNCR11   Kinea Rendimentos Imobiliários   30/09/2026   R$ 1,13      R$ 106,40      14/10/2026
+Ativo    Data-com     Rendimento   Cotação-base   Pagamento
+──────────────────────────────────────────────────────────────
+MXRF11   30/09/2026   R$ 0,10      R$ 9,17        15/10/2026
+KNCR11   30/09/2026   R$ 1,13      R$ 106,40      14/10/2026
 ```
 
 ## Instalação
@@ -73,7 +73,7 @@ ativos catalog status
 ```
 
 Todos os comandos só imprimem o resultado no terminal, numa tabela simples. Em
-terminais com menos de 84 colunas, as colunas Nome e Pagamento são omitidas.
+terminais com menos de 64 colunas, a coluna Pagamento é omitida.
 
 ### Em scripts
 
@@ -88,14 +88,14 @@ A página de cada fundo no fiis.com.br (`https://fiis.com.br/{ticker}/`) traz um
 
 | Campo exibido | Campo do site | Observação |
 |---|---|---|
-| Data-base | `pr_database` / `ur_data_base` | Data com do rendimento |
+| Data-com | `pr_database` / `ur_data_base` | Data com do rendimento |
 | Rendimento | `pr_valor` / `ur_valor` | Valor por cota, em `Decimal` |
 | Cotação-base | `pr_cotacaobase` / `ur_cotacao_base` | Preço de referência do rendimento, **não** a cotação atual |
 | Pagamento | `pr_datapagamento` / `ur_data_pagamento` | Exibido em terminais largos e nos detalhes |
 | Cotação atual | `valor` | Só nos detalhes |
 
 `pr_*` é o próximo rendimento anunciado e `ur_*` é o último pago. Vale o grupo
-com a data-base mais recente. Se um grupo tiver valor sem data-base, ele é ignorado
+com a data-com mais recente. Se um grupo tiver valor sem data-com, ele é ignorado
 e o campo aparece como `N/D`, porque o rendimento não pode ser associado à data
 com segurança.
 

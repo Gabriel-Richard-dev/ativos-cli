@@ -7,7 +7,7 @@ A página de cada fundo embute um objeto JavaScript `dataLayer_content` cujo cam
 - `pr_database` / `pr_valor` / `pr_cotacaobase` / `pr_datapagamento`: próximo rendimento.
 - `valor` / `datacotacao`: cotação atual (exibida apenas nos detalhes, nunca como cotação-base).
 
-A data-base é a "data com" do rendimento. A cotação-base é o preço de referência que o site
+A data-com é a "data com" do rendimento. A cotação-base é o preço de referência que o site
 associa ao rendimento (usado no cálculo do yield), distinto da cotação atual.
 
 O catálogo de fundos vem do índice de busca `data-island="search"`, presente no cabeçalho
@@ -29,7 +29,7 @@ _DATALAYER_MARKER = "var dataLayer_content ="
 _SEARCH_ISLAND = re.compile(r'data-island="search"\s+data-props="([^"]*)"')
 _TICKER = re.compile(r"^[A-Z]{4}\d{2}B?$")
 
-# (rótulo, campo da data-base, campo do valor, campo da cotação-base, campo do pagamento)
+# (rótulo, campo da data-com, campo do valor, campo da cotação-base, campo do pagamento)
 _DIVIDEND_GROUPS = (
     ("pr_*", "pr_database", "pr_valor", "pr_cotacaobase", "pr_datapagamento"),
     ("ur_*", "ur_data_base", "ur_valor", "ur_cotacao_base", "ur_data_pagamento"),
@@ -80,13 +80,13 @@ def parse_fund_page(page: str, expected_ticker: str | None = None) -> FundData:
         if datacom is None and rendimento is None:
             continue
         if datacom is None or rendimento is None:
-            # Sem o par data-base + valor não há como associar o rendimento com segurança.
+            # Sem o par data-com + valor não há como associar o rendimento com segurança.
             data.notes.append(f"Campos {label} incompletos; ignorados por ambiguidade.")
             continue
         candidates.append((datacom, label, rendimento, meta.get(f_base), meta.get(f_pay)))
 
     if candidates:
-        # O grupo com a data-base mais recente vence; em empate, "pr_*" (listado primeiro).
+        # O grupo com a data-com mais recente vence; em empate, "pr_*" (listado primeiro).
         datacom, label, rendimento, base, pay = max(candidates, key=lambda c: c[0])
         data.datacom = datacom
         data.rendimento = rendimento

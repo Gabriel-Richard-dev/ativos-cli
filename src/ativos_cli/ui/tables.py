@@ -52,7 +52,7 @@ def assets_table(
     numbered: bool = False,
     flat: bool = False,
 ) -> Table:
-    """Tabela com uma linha por ativo; data-base é a coluna em destaque."""
+    """Tabela com uma linha por ativo; data-com é a coluna em destaque."""
     show_payment = width >= WIDE
     compact = width < NARROW
     table = Table(
@@ -64,7 +64,7 @@ def assets_table(
     if numbered:
         table.add_column("#", justify="right", style="muted", no_wrap=True)
     table.add_column("Ativo", style="ticker", no_wrap=True)
-    table.add_column("Data-base", style="datacom", no_wrap=True)
+    table.add_column("Data-com", style="datacom", no_wrap=True)
     table.add_column("Rendimento", style="value", justify="right", no_wrap=True)
     table.add_column("Cotação-base", style="value", justify="right", no_wrap=True)
     if show_payment:
@@ -97,28 +97,23 @@ def assets_table(
 def plain_table(views: list[AssetView], width: int) -> Table:
     """Tabela enxuta, uma linha por ativo, para imprimir direto no terminal.
 
-    Em terminais estreitos, nome e pagamento somem para caber o essencial.
+    Em terminais estreitos, a coluna de pagamento some para caber o essencial.
     """
-    wide = width >= WIDE
+    show_payment = width >= NARROW
     table = Table(box=box.SIMPLE_HEAD, header_style="bold", pad_edge=False, show_edge=False)
-    table.add_column("Ativo", no_wrap=True)
-    if wide:
-        table.add_column("Nome")
-    for column in ("Data-base", "Rendimento", "Cotação-base"):
+    for column in ("Ativo", "Data-com", "Rendimento", "Cotação-base"):
         table.add_column(column, no_wrap=True)
-    if wide:
+    if show_payment:
         table.add_column("Pagamento", no_wrap=True)
     for view in views:
         snap = view.valid
-        row = [view.ticker]
-        if wide:
-            row.append(view.name or "")
-        row += [
+        row = [
+            view.ticker,
             format_date(snap.datacom if snap else None),
             format_brl(snap.rendimento if snap else None),
             format_brl(snap.cotacao_base if snap else None),
         ]
-        if wide:
+        if show_payment:
             row.append(format_date(snap.data_pagamento if snap else None))
         table.add_row(*row)
     return table
@@ -161,7 +156,7 @@ def search_table(
     pending: set[str] | None = None,
     buttons: bool = False,
 ) -> Table:
-    """Resultados da pesquisa. Com `views`, inclui data-base e rendimento de cada ativo.
+    """Resultados da pesquisa. Com `views`, inclui data-com e rendimento de cada ativo.
 
     `start` é a posição da primeira linha na lista completa (numeração ao rolar),
     `pending` são os ativos ainda sendo consultados no site e `buttons` acrescenta a
@@ -178,7 +173,7 @@ def search_table(
     table.add_column("Ticker", style="ticker", no_wrap=True)
     table.add_column("Nome", overflow="ellipsis", ratio=1 if flat else None)
     if views is not None:
-        table.add_column("Data-base", style="datacom", no_wrap=True)
+        table.add_column("Data-com", style="datacom", no_wrap=True)
         table.add_column("Rendimento", style="value", justify="right", no_wrap=True)
     if buttons:
         table.add_column("", no_wrap=True)
@@ -214,7 +209,7 @@ def details_panel(view: AssetView, width: int, flat: bool = False) -> Panel:
 
     grid.add_row("Ticker", Text(view.ticker, style="ticker"))
     grid.add_row("Nome", view.name or "N/D")
-    grid.add_row("Data-base", Text(format_date(snap.datacom if snap else None), style="datacom"))
+    grid.add_row("Data-com", Text(format_date(snap.datacom if snap else None), style="datacom"))
     grid.add_row("Rendimento por cota", format_brl(snap.rendimento if snap else None))
     grid.add_row("Cotação-base", format_brl(snap.cotacao_base if snap else None))
     grid.add_row("Data de pagamento", format_date(snap.data_pagamento if snap else None))

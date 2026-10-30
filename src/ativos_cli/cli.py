@@ -50,7 +50,7 @@ Fonte dos dados: fiis.com.br
 
 app = typer.Typer(
     name="ativos",
-    help="Acompanhe datas-base, rendimentos e cotações-base de FIIs pelo terminal.",
+    help="Acompanhe datas-com, rendimentos e cotações-base de FIIs pelo terminal.",
     epilog=EPILOG,
     rich_markup_mode="rich",
     add_completion=False,
@@ -317,7 +317,7 @@ def history_command(
     table = Table(header_style="bold", border_style="border")
     table.add_column("Consulta", no_wrap=True)
     table.add_column("Resultado", no_wrap=True)
-    table.add_column("Data-base", style="datacom", no_wrap=True)
+    table.add_column("Data-com", style="datacom", no_wrap=True)
     table.add_column("Rendimento", justify="right", no_wrap=True)
     table.add_column("Cotação-base", justify="right", no_wrap=True)
     for snap in snapshots:
@@ -371,7 +371,7 @@ def update_catalog(state: State) -> int:
 
 
 def search_views(state: State, hits: list) -> dict[str, AssetView]:
-    """Consulta no site a página de cada resultado, para mostrar a data-base na tabela.
+    """Consulta no site a página de cada resultado, para mostrar a data-com na tabela.
 
     Falhas não interrompem a pesquisa: o ativo aparece com o último dado salvo, se houver.
     """
@@ -408,7 +408,7 @@ def run_search(state: State, term: str, as_json: bool = False) -> None:
                 {
                     "ticker": h.entry.ticker,
                     "nome": h.entry.name,
-                    "data_base": search_date(views.get(h.entry.ticker)),
+                    "datacom": search_date(views.get(h.entry.ticker)),
                 }
                 for h in hits
             ],
