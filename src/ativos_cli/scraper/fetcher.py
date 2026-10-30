@@ -11,7 +11,7 @@ Para cada ticker:
 3. Cotação-base: fechamento da data-com no arquivo COTAHIST da B3 (cache por dia).
    Enquanto o arquivo do dia não sai (manhã seguinte), usa a cotação do momento da B3,
    marcada como provisória. O Rend. % é o valor dividido pela cotação-base, cortado
-   em 3 casas.
+   em 4 casas (como o Status Invest).
 
 Os tickers são consultados em paralelo (até `config.PARALLEL_REQUESTS`); dentro de
 cada ticker as etapas são sequenciais, porque cada uma depende da anterior.
@@ -36,7 +36,7 @@ from ativos_cli.utils.money import truncate, yield_percent
 
 log = logging.getLogger(__name__)
 
-YIELD_PLACES = 3
+YIELD_PLACES = 4
 
 
 class JsonCache:

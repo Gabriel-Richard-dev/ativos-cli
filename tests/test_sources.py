@@ -106,7 +106,7 @@ class TestOfficialFetcher:
         assert data.rendimento == Decimal("0.095")
         assert data.data_pagamento == date(2026, 11, 16)
         assert data.cotacao_base == Decimal("8.94")
-        assert str(data.rendimento_pct) == "1.062"  # 0,095 / 8,94 = 1,0626...
+        assert str(data.rendimento_pct) == "1.0626"  # 0,095 / 8,94 = 1,06263...
         assert result.source_url == fundosnet.notice_page_url(NOTICE_ID)
 
     def test_stops_at_newest_notice(self, tmp_path):
@@ -143,7 +143,7 @@ class TestOfficialFetcher:
         [result] = OfficialFetcher(tmp_path, http=FakeHttp(routes)).fetch(["MXRF11"])
         assert result.data.cotacao_base == Decimal("8.88")
         assert result.data.cotacao_provisoria is True
-        assert str(result.data.rendimento_pct) == "1.069"  # 0,095 / 8,88 = 1,0698...
+        assert str(result.data.rendimento_pct) == "1.0698"  # 0,095 / 8,88 = 1,06981...
 
     def test_official_close_skips_quote(self, tmp_path):
         http = FakeHttp(mxrf_routes())

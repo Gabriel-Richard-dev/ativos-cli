@@ -83,7 +83,7 @@ def fetcher() -> FakeFetcher:
         datacom=date(2026, 9, 30),
         rendimento=Decimal("0.1"),
         cotacao_base=Decimal("9.17"),
-        rendimento_pct=Decimal("1.090"),
+        rendimento_pct=Decimal("1.0905"),
         data_pagamento=date(2026, 10, 15),
         source_field="aviso 1335757",
     )
@@ -93,7 +93,7 @@ def fetcher() -> FakeFetcher:
         datacom=date(2026, 9, 30),
         rendimento=Decimal("1.13"),
         cotacao_base=Decimal("106.4"),
-        rendimento_pct=Decimal("1.062"),
+        rendimento_pct=Decimal("1.0620"),
         data_pagamento=date(2026, 10, 14),
         source_field="aviso 1335000",
     )

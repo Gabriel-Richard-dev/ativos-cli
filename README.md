@@ -8,8 +8,10 @@ Acompanhe pelo terminal a **data-com**, o **rendimento por cota** e a
 $ ativos
   Ativo    Data-com     Rendimento   Rend. %   Cotação-base   Pagamento
   ──────────────────────────────────────────────────────────────────────
-  MXRF11   30/10/2026   R$ 0,095     1,071%    R$ 8,87        16/11/2026
-  XPLG11   30/10/2026   R$ 0,82      0,912%    R$ 89,86       16/11/2026
+  MXRF11   30/10/2026   R$ 0,095     1,0698%*  R$ 8,88*       16/11/2026
+  XPML11   16/10/2026   R$ 0,92      0,8680%   R$ 105,99      23/10/2026
+
+  * cotação provisória da B3; o fechamento oficial sai na manhã seguinte.
 ```
 
 ## Instalação
@@ -75,8 +77,8 @@ ativos catalog status
 Todos os comandos só imprimem o resultado no terminal, numa tabela simples. Em
 terminais com menos de 76 colunas, a coluna Pagamento é omitida. `Rend. %` é o
 rendimento em % da cotação-base (o dividend yield do mês), como o site informa,
-cortado em 3 casas decimais (sem arredondar) já na coleta, então o `--json` e o
-histórico também guardam 3 casas.
+cortado em 4 casas decimais (sem arredondar, como o Status Invest) já na coleta,
+então o `--json` e o histórico também guardam 4 casas.
 
 A tabela só mostra rendimentos com data-com no mês atual (ou depois). Se a data-com
 mais recente de um ativo for de um mês anterior, a linha dele aparece com traços (`—`)
@@ -96,7 +98,7 @@ Os rendimentos vêm das fontes oficiais da B3:
 |---|---|---|
 | Data-com, Rendimento, Pagamento | Aviso aos Cotistas "Rendimentos e Amortizações" no [FundosNet](https://fnet.bmfbovespa.com.br/fnet/publico/abrirGerenciadorDocumentosCVM) | XML estruturado publicado pelo próprio fundo; sai antes de qualquer site |
 | Cotação-base | Arquivo diário de cotações da B3 (COTAHIST) | Preço de fechamento na data-com. A B3 publica o arquivo na manhã seguinte; até lá, vale a cotação do momento do [serviço de cotações da B3](https://cotacao.b3.com.br) (atraso de 15 min), marcada com `*` como provisória |
-| Rend. % | Calculado | Rendimento ÷ cotação-base × 100, cortado em 3 casas (sem arredondar); com `*` quando a cotação é provisória |
+| Rend. % | Calculado | Rendimento ÷ cotação-base × 100, cortado em 4 casas (sem arredondar); com `*` quando a cotação é provisória |
 
 Para achar os avisos de um fundo no FundosNet é preciso o CNPJ dele, descoberto uma
 vez por fundo e guardado em cache:

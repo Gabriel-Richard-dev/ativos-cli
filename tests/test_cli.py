@@ -64,7 +64,7 @@ def test_show_one_row_table(run):
     assert "30/09/2026" in result.output
     assert "R$ 0,10" in result.output
     assert "R$ 9,17" in result.output
-    assert "1,090%" in result.output
+    assert "1,0905%" in result.output
     assert "CONSULTA" not in result.output
     rows = [line for line in result.output.splitlines() if "R$" in line]
     assert len(rows) == 1
@@ -84,7 +84,7 @@ def test_provisional_price_is_marked(run, fetcher):
     fetcher.results["MXRF11"].data.cotacao_provisoria = True
     result = run("MXRF11")
     assert "R$ 9,17*" in result.output
-    assert "1,090%*" in result.output
+    assert "1,0905%*" in result.output
     assert "cotação provisória" in result.output
     assert run("MXRF11", "--json").output.count('"cotacao_provisoria": true') == 1
 
@@ -100,7 +100,7 @@ def test_show_json(run):
     data = json.loads(result.output)
     assert data["datacom"] == "2026-09-30"
     assert data["rendimento"] == "0.1"
-    assert data["rendimento_pct"] == "1.090"
+    assert data["rendimento_pct"] == "1.0905"
     assert data["status"] == "updated"
 
 

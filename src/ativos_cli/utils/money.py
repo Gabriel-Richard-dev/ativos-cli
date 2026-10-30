@@ -57,7 +57,7 @@ def truncate(value: Decimal | None, places: int) -> Decimal | None:
 
 
 def format_percent(value: Decimal | None) -> str:
-    """Formata como "1,090%"."""
+    """Formata como "1,0905%"."""
     if value is None:
         return NA
     return f"{value:f}%".replace(".", ",")
