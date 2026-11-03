@@ -30,6 +30,11 @@ class FundData(BaseModel):
     cotacao_provisoria: bool = False
     cotacao_atual: Decimal | None = None
     data_cotacao: date | None = None
+    # Rendimento da data-com anterior à atual (o aviso anterior no FundosNet).
+    datacom_anterior: date | None = None
+    rendimento_anterior: Decimal | None = None
+    rendimento_pct_anterior: Decimal | None = None
+    cotacao_base_anterior: Decimal | None = None
     # Documento de origem do rendimento (ex.: "aviso 1365016" do FundosNet).
     source_field: str | None = None
     notes: list[str] = Field(default_factory=list)
@@ -73,6 +78,10 @@ class Snapshot(BaseModel):
     cotacao_base: Decimal | None = None
     cotacao_provisoria: bool = False
     cotacao_atual: Decimal | None = None
+    datacom_anterior: date | None = None
+    rendimento_anterior: Decimal | None = None
+    rendimento_pct_anterior: Decimal | None = None
+    cotacao_base_anterior: Decimal | None = None
     source_field: str | None = None
     error: str | None = None
 

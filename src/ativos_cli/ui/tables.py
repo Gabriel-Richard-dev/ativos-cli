@@ -27,6 +27,8 @@ INDENT = 2
 DASH = "—"
 PROVISIONAL_NOTE = "* cotação provisória da B3; o fechamento oficial sai na manhã seguinte."
 PLAIN_WIDE = 76
+# A partir desta largura, as colunas do rendimento anterior ficam ao lado das do mês.
+PLAIN_FULL_WIDE = 122
 
 
 def header(title: str, subtitle: str, width: int) -> Panel:
@@ -106,43 +108,84 @@ def plain_table(views: list[AssetView], width: int, today: date) -> RenderableTy
     """Tabela enxuta, uma linha por ativo, para imprimir direto no terminal.
 
     Só mostra rendimentos com data-com no mês de `today` em diante; os de meses
-    anteriores viram uma linha com traços. Fica recuada da borda do terminal e, em
-    terminais estreitos, a coluna de pagamento some para caber o essencial.
+    anteriores viram traços. As colunas "ant." trazem o rendimento anterior ao do mês:
+    enquanto o do mês não sai, é o último rendimento coletado. Num terminal largo elas
+    ficam à direita de um divisor vertical; num estreito, numa segunda tabela logo
+    abaixo, para nada quebrar de linha. Fica recuada da borda do terminal e, abaixo de
+    `PLAIN_WIDE` colunas, a coluna Pagamento some.
     """
+    side_by_side = width >= PLAIN_FULL_WIDE
     show_payment = width >= PLAIN_WIDE
-    table = Table(box=box.SIMPLE_HEAD, header_style="bold", pad_edge=False, show_edge=False)
-    table.add_column("Ativo", no_wrap=True)
-    table.add_column("Data-com", no_wrap=True)
-    table.add_column("Rendimento", no_wrap=True)
-    table.add_column("Rend. %", no_wrap=True)
-    table.add_column("Cotação-base", no_wrap=True)
+    month = _plain("Ativo", "Data-com", "Rendimento", "Rend. %", "Cotação-base")
     if show_payment:
-        table.add_column("Pagamento", no_wrap=True)
+        month.add_column("Pagamento", no_wrap=True)
+    # Na tabela de baixo, o ativo se repete para cada linha ter dono.
+    ticker_column = [] if side_by_side else ["Ativo"]
+    previous = _plain(*ticker_column, "Data-com ant.", "Rend. ant.", "Rend. % ant.")
     month_start = today.replace(day=1)
     provisional = False
     for view in views:
         snap = view.valid
-        if snap is None or snap.datacom is None or snap.datacom < month_start:
-            table.add_row(view.ticker, *[DASH] * (len(table.columns) - 1))
+        if snap is None or snap.datacom is None:
+            month.add_row(view.ticker, *[DASH] * (len(month.columns) - 1))
+            previous.add_row(*([] if side_by_side else [view.ticker]), DASH, DASH, DASH)
             continue
-        row = [
-            view.ticker,
-            format_date(snap.datacom),
-            format_brl(snap.rendimento),
-            # Sem cotação nenhuma ainda: traço. Cotação do dia, antes do fechamento
-            # oficial da B3: marcada com asterisco.
-            marked(format_percent, snap.rendimento_pct, snap.cotacao_provisoria),
-            marked(format_brl, snap.cotacao_base, snap.cotacao_provisoria),
-        ]
-        provisional = provisional or (snap.cotacao_provisoria and snap.cotacao_base is not None)
-        if show_payment:
-            row.append(format_date(snap.data_pagamento))
-        table.add_row(*row)
+        current = snap.datacom >= month_start
+        if current:
+            row = [
+                view.ticker,
+                format_date(snap.datacom),
+                format_brl(snap.rendimento),
+                # Sem cotação nenhuma ainda: traço. Cotação do dia, antes do fechamento
+                # oficial da B3: marcada com asterisco.
+                marked(format_percent, snap.rendimento_pct, snap.cotacao_provisoria),
+                marked(format_brl, snap.cotacao_base, snap.cotacao_provisoria),
+            ]
+            if show_payment:
+                row.append(format_date(snap.data_pagamento))
+            provisional = provisional or (snap.cotacao_provisoria and snap.cotacao_base is not None)
+            previous.add_row(
+                *([] if side_by_side else [view.ticker]),
+                dash_or(format_date, snap.datacom_anterior),
+                dash_or(format_brl, snap.rendimento_anterior),
+                dash_or(format_percent, snap.rendimento_pct_anterior),
+            )
+        else:
+            row = [view.ticker, *[DASH] * (len(month.columns) - 1)]
+            # O rendimento do mês ainda não saiu: o último coletado é o anterior.
+            previous.add_row(
+                *([] if side_by_side else [view.ticker]),
+                format_date(snap.datacom),
+                dash_or(format_brl, snap.rendimento),
+                marked(format_percent, snap.rendimento_pct, snap.cotacao_provisoria),
+            )
+            provisional = provisional or (
+                snap.cotacao_provisoria and snap.rendimento_pct is not None
+            )
+        month.add_row(*row)
+    if side_by_side:
+        # Divisor entre o mês e o anterior; cruza a linha abaixo do cabeçalho.
+        divider = Text("\n".join(["  │  ", "──┼──", *["  │  "] * len(views)]), style="border")
+        table: RenderableType = Table.grid()
+        table.add_row(month, divider, previous)
+    else:
+        table = Group(month, Text(""), previous)
     body = Padding(table, (0, 0, 0, INDENT), expand=False)
     if not provisional:
         return body
     note = Text(f"\n{' ' * INDENT}{PROVISIONAL_NOTE}", style="muted")
     return Group(body, note)
+
+
+def _plain(*headers: str) -> Table:
+    table = Table(box=box.SIMPLE_HEAD, header_style="bold", pad_edge=False, show_edge=False)
+    for header in headers:
+        table.add_column(header, no_wrap=True)
+    return table
+
+
+def dash_or(fmt, value) -> str:
+    return fmt(value) if value is not None else DASH
 
 
 def marked(fmt, value, provisional: bool) -> str:
@@ -249,6 +292,11 @@ def details_panel(view: AssetView, width: int, flat: bool = False) -> Panel:
     grid.add_row("Cotação-base", base)
     grid.add_row("Rend. %", format_percent(snap.rendimento_pct if snap else None))
     grid.add_row("Data de pagamento", format_date(snap.data_pagamento if snap else None))
+    grid.add_row("", "")
+    grid.add_row("Data-com anterior", format_date(snap.datacom_anterior if snap else None))
+    grid.add_row("Rendimento anterior", format_brl(snap.rendimento_anterior if snap else None))
+    grid.add_row("Cotação-base anterior", format_brl(snap.cotacao_base_anterior if snap else None))
+    grid.add_row("Rend. % anterior", format_percent(snap.rendimento_pct_anterior if snap else None))
     grid.add_row("", "")
     grid.add_row("Última consulta válida", format_datetime(snap.fetched_at if snap else None))
     origin = config.SOURCE_NAME

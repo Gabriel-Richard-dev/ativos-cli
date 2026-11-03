@@ -148,6 +148,10 @@ def main(
 # --- consulta individual -------------------------------------------------------
 
 
+def _str(value) -> str | None:
+    return str(value) if value is not None else None
+
+
 def view_to_dict(view: AssetView) -> dict:
     snap = view.valid
     return {
@@ -163,6 +167,12 @@ def view_to_dict(view: AssetView) -> dict:
         "data_pagamento": (
             snap.data_pagamento.isoformat() if snap and snap.data_pagamento else None
         ),
+        "datacom_anterior": (
+            snap.datacom_anterior.isoformat() if snap and snap.datacom_anterior else None
+        ),
+        "rendimento_anterior": _str(snap.rendimento_anterior if snap else None),
+        "rendimento_pct_anterior": _str(snap.rendimento_pct_anterior if snap else None),
+        "cotacao_base_anterior": _str(snap.cotacao_base_anterior if snap else None),
         "status": view.status.name.lower(),
         "desatualizado": view.stale,
         "consultado_em": snap.fetched_at.isoformat() if snap else None,

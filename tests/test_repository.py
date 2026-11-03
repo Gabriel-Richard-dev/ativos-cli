@@ -46,6 +46,10 @@ def test_snapshot_roundtrip(repo, fetcher):
     assert loaded.cotacao_base == Decimal("9.17")
     assert loaded.datacom.isoformat() == "2026-09-30"
     assert loaded.source_field == "aviso 1335757"
+    assert loaded.datacom_anterior.isoformat() == "2026-08-29"
+    assert loaded.rendimento_anterior == Decimal("0.09")
+    assert loaded.rendimento_pct_anterior == Decimal("0.9836")
+    assert loaded.cotacao_base_anterior == Decimal("9.15")
 
 
 def test_failure_does_not_replace_valid_data(repo, fetcher):

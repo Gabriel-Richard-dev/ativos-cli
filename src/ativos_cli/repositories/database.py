@@ -50,6 +50,13 @@ MIGRATIONS = [
     # Consultas gravadas antes desta versão ficam sem o percentual do site.
     "ALTER TABLE asset_snapshots ADD COLUMN rendimento_pct TEXT;",
     "ALTER TABLE asset_snapshots ADD COLUMN cotacao_provisoria INTEGER NOT NULL DEFAULT 0;",
+    # Rendimento da data-com anterior; consultas antigas ficam sem ele.
+    """
+    ALTER TABLE asset_snapshots ADD COLUMN datacom_anterior TEXT;
+    ALTER TABLE asset_snapshots ADD COLUMN rendimento_anterior TEXT;
+    ALTER TABLE asset_snapshots ADD COLUMN rendimento_pct_anterior TEXT;
+    ALTER TABLE asset_snapshots ADD COLUMN cotacao_base_anterior TEXT;
+    """,
 ]
 
 

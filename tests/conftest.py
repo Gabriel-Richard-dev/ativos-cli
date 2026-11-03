@@ -85,6 +85,10 @@ def fetcher() -> FakeFetcher:
         cotacao_base=Decimal("9.17"),
         rendimento_pct=Decimal("1.0905"),
         data_pagamento=date(2026, 10, 15),
+        datacom_anterior=date(2026, 8, 29),
+        rendimento_anterior=Decimal("0.09"),
+        rendimento_pct_anterior=Decimal("0.9836"),
+        cotacao_base_anterior=Decimal("9.15"),
         source_field="aviso 1335757",
     )
     f.set_data(

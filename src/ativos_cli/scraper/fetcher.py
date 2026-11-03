@@ -5,9 +5,10 @@ Para cada ticker:
    fiis.com.br; se ela não existir, cadastro da CVM pelo ISIN e, para fundos que
    mudaram de ticker, pelo nome oficial informado pela B3. O aviso do FundosNet
    confirma: ele precisa trazer o ticker procurado.
-2. Data-com, valor e pagamento: último aviso de rendimentos no FundosNet (B3).
-   Avisos publicados não mudam, então cada um é lido uma vez e fica em cache; numa
-   atualização com cache, sobra uma requisição (a busca) por fundo.
+2. Data-com, valor e pagamento: último aviso de rendimentos no FundosNet (B3), e o
+   aviso de antes dele para o rendimento anterior (cotação-base no COTAHIST, como o
+   atual). Avisos publicados não mudam, então cada um é lido uma vez e fica em cache;
+   numa atualização com cache, sobra uma requisição (a busca) por fundo.
 3. Cotação-base: fechamento da data-com no arquivo COTAHIST da B3 (cache por dia), o
    mesmo que o Status Invest mostra. Enquanto o arquivo do dia não sai (manhã
    seguinte), usa a cotação-base e o Rend. % do card de rendimento do Status Invest;
@@ -172,10 +173,12 @@ class OfficialFetcher:
 
     def _fund_data(self, identity: FundIdentity) -> FundData:
         data = FundData(ticker=identity.ticker, name=identity.name)
-        dividend = self._latest_dividend(identity)
+        dividend, previous = self._latest_dividends(identity)
         if dividend is None:
             data.notes.append("Nenhum aviso de rendimentos encontrado no FundosNet.")
             return data
+        if previous is not None:
+            self._fill_previous(data, identity.ticker, previous)
         data.datacom = dividend.datacom
         data.rendimento = dividend.valor
         data.data_pagamento = dividend.data_pagamento
@@ -237,18 +240,47 @@ class OfficialFetcher:
             log.debug("Cotação provisória de %s indisponível: %s", ticker, exc)
             return None
 
-    def _latest_dividend(self, identity: FundIdentity) -> fundosnet.Dividend | None:
+    def _fill_previous(self, data: FundData, ticker: str, previous: fundosnet.Dividend) -> None:
+        data.datacom_anterior = previous.datacom
+        data.rendimento_anterior = previous.valor
+        try:
+            data.cotacao_base_anterior = self.prices.close(ticker, previous.datacom)
+        except AtivosError as exc:  # sem a cotação anterior, o resto da linha continua valendo
+            log.debug("Cotação-base anterior de %s indisponível: %s", ticker, exc)
+            return
+        data.rendimento_pct_anterior = truncate(
+            yield_percent(previous.valor, data.cotacao_base_anterior), YIELD_PLACES
+        )
+
+    def _latest_dividends(
+        self, identity: FundIdentity
+    ) -> tuple[fundosnet.Dividend | None, fundosnet.Dividend | None]:
+        """Rendimento atual e o da data-com anterior a ele (None quando não houver)."""
         notices = fundosnet.parse_search(
             self.http.get(
                 fundosnet.search_url(identity.cnpj), {"X-Requested-With": "XMLHttpRequest"}
             )
         )
         # A busca vem do aviso mais novo para o mais antigo: o primeiro com rendimento
-        # para o ticker é o atual, e os demais nem precisam ser baixados.
+        # para o ticker é o atual; o anterior é o primeiro depois dele com data-com mais
+        # antiga (um aviso retificado repete a data-com). Os demais nem são baixados.
+        current = None
         for notice in notices:
-            if (dividend := self._notice_dividend(notice.id, identity.ticker)) is not None:
-                return dividend
-        return None
+            try:
+                dividend = self._notice_dividend(notice.id, identity.ticker)
+            except AtivosError:
+                if current is None:
+                    raise
+                # Sem o aviso anterior, o atual continua valendo.
+                log.debug("Aviso %s de %s indisponível", notice.id, identity.ticker)
+                break
+            if dividend is None:
+                continue
+            if current is None:
+                current = dividend
+            elif dividend.datacom < current.datacom:
+                return current, dividend
+        return current, None
 
     def _notice_dividend(self, notice_id: int, ticker: str) -> fundosnet.Dividend | None:
         key = f"{notice_id}:{ticker}"

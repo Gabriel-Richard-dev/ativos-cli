@@ -66,18 +66,57 @@ def test_show_one_row_table(run):
     assert "R$ 9,17" in result.output
     assert "1,0905%" in result.output
     assert "CONSULTA" not in result.output
-    rows = [line for line in result.output.splitlines() if "R$" in line]
-    assert len(rows) == 1
+    # Uma linha na tabela do mês e outra na do rendimento anterior, logo abaixo.
+    rows = [line for line in result.output.splitlines() if "MXRF11" in line]
+    assert len(rows) == 2
+    assert "R$ 9,17" in rows[0]
 
 
 def test_previous_month_datacom_shows_dashes(run, monkeypatch):
     monkeypatch.setattr(cli, "today", lambda: date(2026, 10, 1))
     result = run("MXRF11")
     assert result.exit_code == 0, result.output
-    assert "30/09/2026" not in result.output
-    assert "R$" not in result.output
+    month, previous = [line for line in result.output.splitlines() if "MXRF11" in line]
+    assert month.split() == ["MXRF11", "—", "—", "—", "—", "—"]
+    assert previous.split() == ["MXRF11", "30/09/2026", "R$", "0,10", "1,0905%"]
+
+
+def test_wide_terminal_shows_previous_dividend(run):
+    result = run("MXRF11", width=130)
+    assert result.exit_code == 0, result.output
+    header = next(line for line in result.output.splitlines() if "Ativo" in line)
+    month, previous = header.split("│")
+    assert month.split()[-1] == "Pagamento"
+    assert [c.strip() for c in previous.split("   ")] == [
+        "Data-com ant.",
+        "Rend. ant.",
+        "Rend. % ant.",
+    ]
+    assert "┼" in result.output
     row = next(line for line in result.output.splitlines() if "MXRF11" in line)
-    assert row.split() == ["MXRF11", "—", "—", "—", "—", "—"]
+    assert row.split()[-6:] == ["15/10/2026", "│", "29/08/2026", "R$", "0,09", "0,9836%"]
+
+
+def test_narrow_terminal_stacks_previous_dividend(run):
+    result = run("MXRF11", width=80)
+    assert result.exit_code == 0, result.output
+    assert "│" not in result.output
+    lines = result.output.splitlines()
+    assert max(len(line) for line in lines) <= 80
+    month, previous = [line for line in lines if "MXRF11" in line]
+    assert month.split()[-1] == "15/10/2026"  # Pagamento junto do mês
+    assert previous.split() == ["MXRF11", "29/08/2026", "R$", "0,09", "0,9836%"]
+    assert "Data-com ant." in result.output
+
+
+def test_previous_month_datacom_becomes_previous(run, monkeypatch):
+    monkeypatch.setattr(cli, "today", lambda: date(2026, 10, 1))
+    result = run("MXRF11", width=130)
+    row = next(line for line in result.output.splitlines() if "MXRF11" in line)
+    assert row.split() == [
+        *["MXRF11", "—", "—", "—", "—", "—"],
+        *["│", "30/09/2026", "R$", "0,10", "1,0905%"],
+    ]
 
 
 def test_provisional_price_is_marked(run, fetcher):
@@ -101,6 +140,10 @@ def test_show_json(run):
     assert data["datacom"] == "2026-09-30"
     assert data["rendimento"] == "0.1"
     assert data["rendimento_pct"] == "1.0905"
+    assert data["datacom_anterior"] == "2026-08-29"
+    assert data["rendimento_anterior"] == "0.09"
+    assert data["rendimento_pct_anterior"] == "0.9836"
+    assert data["cotacao_base_anterior"] == "9.15"
     assert data["status"] == "updated"
 
 
@@ -160,7 +203,8 @@ def test_wallet_single_table(run):
     assert result.exit_code == 0, result.output
     assert "MXRF11" in result.output
     assert "KNCR11" in result.output
-    assert result.output.count("Data-com") == 1
+    assert result.output.count("Cotação-base") == 1
+    assert result.output.count("Data-com ant.") == 1
 
 
 def test_wallet_marks_failures(run, fetcher):

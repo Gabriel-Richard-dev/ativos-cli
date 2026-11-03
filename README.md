@@ -6,10 +6,10 @@ Acompanhe pelo terminal a **data-com**, o **rendimento por cota** e a
 
 ```text
 $ ativos
-  Ativo    Data-com     Rendimento   Rend. %   Cotação-base   Pagamento
-  ──────────────────────────────────────────────────────────────────────
-  MXRF11   30/10/2026   R$ 0,095     1,0710%   R$ 8,87        16/11/2026
-  XPML11   16/10/2026   R$ 0,92      0,8680%   R$ 105,99      23/10/2026
+  Ativo    Data-com     Rendimento   Rend. %   Cotação-base   Pagamento    │  Data-com ant.   Rend. ant.   Rend. % ant.
+  ───────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────
+  MXRF11   30/10/2026   R$ 0,095     1,0698%   R$ 8,88        16/11/2026   │  30/09/2026      R$ 0,10      1,0905%
+  KNCR11   30/10/2026   R$ 1,10      1,0478%   R$ 104,98      13/11/2026   │  30/09/2026      R$ 1,13      1,0620%
 ```
 
 ## Instalação
@@ -72,15 +72,18 @@ ativos catalog update        # baixa a lista de fundos usada na pesquisa
 ativos catalog status
 ```
 
-Todos os comandos só imprimem o resultado no terminal, numa tabela simples. Em
-terminais com menos de 76 colunas, a coluna Pagamento é omitida. `Rend. %` é o
+Todos os comandos só imprimem o resultado no terminal, numa tabela simples. As
+colunas "ant." trazem o rendimento da data-com anterior (data, valor e Rend. %), para
+comparar com o do mês. Em terminais com 122 colunas ou mais, elas ficam à direita de
+um divisor; em terminais menores, numa segunda tabela logo abaixo, para nenhuma linha
+quebrar. Com menos de 76 colunas, a coluna Pagamento é omitida. O `--detalhes` e o `--json` sempre trazem o rendimento anterior. `Rend. %` é o
 rendimento em % da cotação-base (o dividend yield do mês), como o site informa,
 cortado em 4 casas decimais (sem arredondar, como o Status Invest) já na coleta,
 então o `--json` e o histórico também guardam 4 casas.
 
 A tabela só mostra rendimentos com data-com no mês atual (ou depois). Se a data-com
-mais recente de um ativo for de um mês anterior, a linha dele aparece com traços (`—`)
-até sair a do mês. O `--json` continua trazendo o último dado, seja de que mês for.
+mais recente de um ativo for de um mês anterior, as colunas do mês aparecem com traços
+(`—`) até sair a do mês, e esse último rendimento aparece nas colunas "ant.". O `--json` continua trazendo o último dado, seja de que mês for.
 
 ### Em scripts
 
@@ -100,6 +103,7 @@ publicar o fechamento oficial, a cotação-base e o Rend. % vêm do
 | Cotação-base | Arquivo diário de cotações da B3 (COTAHIST) | Preço de fechamento na data-com. A B3 publica o arquivo na manhã seguinte |
 | Cotação-base, Rend. % (antes do COTAHIST) | Cards "Último rendimento" e "Próximo rendimento" da página do fundo no Status Invest | Usados quando a data base do card é a data-com do aviso, e guardados em cache. O site fica atrás do Cloudflare, então a página é aberta num Chrome sem janela (precisa do Google Chrome instalado). Se o Chrome faltar ou o site bloquear, vale a cotação do momento do [serviço de cotações da B3](https://cotacao.b3.com.br) (atraso de 15 min, inclui o after-market), marcada com `*` como provisória |
 | Rend. % | Calculado | Rendimento ÷ cotação-base × 100, cortado em 4 casas (sem arredondar); com `*` quando a cotação é provisória |
+| Data-com ant., Rend. ant., Rend. % ant. | Aviso de rendimentos anterior ao atual no FundosNet e COTAHIST da data-com dele | Mesmo cálculo do Rend. %. Um aviso que repete a data-com do atual (retificação) é ignorado |
 
 Para achar os avisos de um fundo no FundosNet é preciso o CNPJ dele, descoberto uma
 vez por fundo e guardado em cache:

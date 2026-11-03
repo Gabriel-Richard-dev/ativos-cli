@@ -18,9 +18,9 @@ BASE_URL = "https://fnet.bmfbovespa.com.br/fnet/publico"
 # Categoria "Aviso aos Cotistas - Estruturado", tipo "Rendimentos e Amortizações".
 CATEGORY_ID = 14
 TYPE_ID = 41
-# Avisos mais recentes listados por fundo. Só são baixados até achar o do ticker
-# (fundos com mais de uma classe publicam um aviso por classe).
-NOTICES_TO_CHECK = 3
+# Avisos mais recentes listados por fundo. Só são baixados até achar os dois últimos
+# rendimentos do ticker (fundos com mais de uma classe publicam um aviso por classe).
+NOTICES_TO_CHECK = 6
 
 
 @dataclass

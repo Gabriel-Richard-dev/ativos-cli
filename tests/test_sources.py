@@ -13,6 +13,7 @@ from tests.conftest import FIXTURES, fixture_text
 
 CNPJ = "97521225000125"
 NOTICE_ID = 1365016  # aviso de outubro/2026 do MXRF11 (fixture)
+PREVIOUS_NOTICE_ID = 1335757  # aviso de setembro/2026
 
 
 def fixture_bytes(name: str) -> bytes:
@@ -39,6 +40,11 @@ def mxrf_routes(cotahist_day: date | None = date(2026, 10, 30)) -> dict[str, byt
         "https://fiis.com.br/mxrf11/": fixture_bytes("fiis_mxrf11.html"),
         fundosnet.search_url(CNPJ): search.encode(),
         fundosnet.document_url(NOTICE_ID): fixture_bytes("fnet_aviso_mxrf11.xml"),
+        fundosnet.document_url(PREVIOUS_NOTICE_ID): fixture_bytes("fnet_aviso_mxrf11_set.xml"),
+        # Fechamento da data-com anterior (30/09); o arquivo de 29/10 faz as vezes dele.
+        f"{b3.BASE_URL}/{b3.cotahist_name(date(2026, 9, 30))}": fixture_bytes(
+            "COTAHIST_D29102026.ZIP"
+        ),
     }
     if cotahist_day:
         # Reaproveita o arquivo de 29/10 como se fosse o fechamento da data-com.
@@ -109,11 +115,48 @@ class TestOfficialFetcher:
         assert str(data.rendimento_pct) == "1.0626"  # 0,095 / 8,94 = 1,06263...
         assert result.source_url == fundosnet.notice_page_url(NOTICE_ID)
 
-    def test_stops_at_newest_notice(self, tmp_path):
+    def test_previous_dividend(self, tmp_path):
+        [result] = OfficialFetcher(tmp_path, http=FakeHttp(mxrf_routes())).fetch(["MXRF11"])
+        data = result.data
+        assert data.datacom_anterior == date(2026, 9, 30)
+        assert data.rendimento_anterior == Decimal("0.10")
+        assert data.cotacao_base_anterior == Decimal("8.94")
+        assert str(data.rendimento_pct_anterior) == "1.1185"  # 0,10 / 8,94 = 1,11856...
+        assert data.source_field == f"aviso {NOTICE_ID}"
+
+    def test_stops_at_previous_notice(self, tmp_path):
         http = FakeHttp(mxrf_routes())
         OfficialFetcher(tmp_path, http=http).fetch(["MXRF11"])
         downloads = [u for u in http.requests if "downloadDocumento" in u]
-        assert downloads == [fundosnet.document_url(NOTICE_ID)]
+        assert downloads == [
+            fundosnet.document_url(NOTICE_ID),
+            fundosnet.document_url(PREVIOUS_NOTICE_ID),
+        ]
+
+    def test_rectified_notice_is_not_previous(self, tmp_path):
+        routes = mxrf_routes()
+        # Retificação: o segundo aviso repete a data-com do atual.
+        routes[fundosnet.document_url(PREVIOUS_NOTICE_ID)] = fixture_bytes("fnet_aviso_mxrf11.xml")
+        routes[fundosnet.document_url(1305736)] = fixture_bytes("fnet_aviso_mxrf11_set.xml")
+        [result] = OfficialFetcher(tmp_path, http=FakeHttp(routes)).fetch(["MXRF11"])
+        assert result.data.datacom == date(2026, 10, 30)
+        assert result.data.datacom_anterior == date(2026, 9, 30)
+
+    def test_previous_notice_failure_keeps_current(self, tmp_path):
+        routes = mxrf_routes()
+        del routes[fundosnet.document_url(PREVIOUS_NOTICE_ID)]
+        [result] = OfficialFetcher(tmp_path, http=FakeHttp(routes)).fetch(["MXRF11"])
+        assert result.status == FetchStatus.OK
+        assert result.data.rendimento == Decimal("0.095")
+        assert result.data.datacom_anterior is None
+
+    def test_previous_without_closing_price(self, tmp_path):
+        routes = mxrf_routes()
+        del routes[f"{b3.BASE_URL}/{b3.cotahist_name(date(2026, 9, 30))}"]
+        [result] = OfficialFetcher(tmp_path, http=FakeHttp(routes)).fetch(["MXRF11"])
+        assert result.data.rendimento_anterior == Decimal("0.10")
+        assert result.data.cotacao_base_anterior is None
+        assert result.data.rendimento_pct_anterior is None
 
     def test_skips_notice_of_another_class(self, tmp_path):
         routes = mxrf_routes()
@@ -121,6 +164,7 @@ class TestOfficialFetcher:
         routes[fundosnet.document_url(1335757)] = fixture_bytes("fnet_aviso_mxrf11.xml")
         [result] = OfficialFetcher(tmp_path, http=FakeHttp(routes)).fetch(["MXRF11"])
         assert result.data.source_field == "aviso 1335757"
+        assert result.data.datacom_anterior is None  # o aviso seguinte não está disponível
 
     def test_second_fetch_only_searches_notices(self, tmp_path):
         OfficialFetcher(tmp_path, http=FakeHttp(mxrf_routes())).fetch(["MXRF11"])
