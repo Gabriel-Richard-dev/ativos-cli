@@ -131,15 +131,16 @@ def test_remove_requires_confirmation(make_app, service):
     service.repo.add_to_wallet("MXRF11")
     service.repo.add_to_wallet("KNCR11")
     app = make_app()
+    # Sem data-com, a carteira fica em ordem de ticker: KNCR11, MXRF11.
     app.move(1)
     app.ask_remove()
     assert app.mode == Mode.CONFIRM
-    assert "KNCR11" in app.confirmation.question
+    assert "MXRF11" in app.confirmation.question
     app.answer(False)
     assert len(app.wallet) == 2
     app.ask_remove()
     app.answer(True)
-    assert [v.ticker for v in app.wallet] == ["MXRF11"]
+    assert [v.ticker for v in app.wallet] == ["KNCR11"]
     assert app.mode == Mode.LIST
 
 

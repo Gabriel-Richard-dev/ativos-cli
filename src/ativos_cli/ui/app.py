@@ -48,7 +48,13 @@ from ativos_cli.errors import AtivosError
 from ativos_cli.models import AssetView, CatalogEntry, DisplayStatus, FetchResult, FetchStatus
 from ativos_cli.services.asset_service import AssetService
 from ativos_cli.services.search_service import SearchHit, SearchService, rank
-from ativos_cli.ui.tables import ADD_BUTTON, assets_table, details_panel, search_table
+from ativos_cli.ui.tables import (
+    ADD_BUTTON,
+    assets_table,
+    details_panel,
+    group_by_type,
+    search_table,
+)
 from ativos_cli.ui.theme import render_ansi
 
 log = logging.getLogger(__name__)
@@ -239,8 +245,10 @@ class AtivosApp:
     # --- operações (rodam na thread de trabalho) -------------------------------
 
     def _wallet_views(self) -> list[AssetView]:
+        """Carteira com os FIIs primeiro e depois os ETFs, cada grupo por data-com."""
         tickers = self.service.repo.wallet_tickers()
-        return [self.service.view(t, updated_now=t in self.updated) for t in tickers]
+        views = [self.service.view(t, updated_now=t in self.updated) for t in tickers]
+        return [v for _, group in group_by_type(views) for v in group]
 
     def _refresh_job(self, tickers: list[str] | None = None) -> None:
         targets = tickers or self.service.repo.wallet_tickers()

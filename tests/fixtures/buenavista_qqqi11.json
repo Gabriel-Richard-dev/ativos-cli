@@ -1,0 +1,40 @@
+{
+ "Dividends x CDI": [
+  {
+   "Ticker": "QQQI11",
+   "Data COM": "15/09/2026",
+   "Data EX": "16/09/2026",
+   "Data Liquidação": "08/10/2026",
+   "Dividendo por Cota": "1.11241498",
+   "Dividend Yield": "1.1732",
+   "CDI": ""
+  },
+  {
+   "Ticker": "QQQI11",
+   "Data COM": "20/10/2026",
+   "Data EX": "21/10/2026",
+   "Data Liquidação": "10/11/2026",
+   "Dividendo por Cota": "1.08310423",
+   "Dividend Yield": "1.1698",
+   "CDI": ""
+  },
+  {
+   "Ticker": "QQQI11",
+   "Data COM": "17/11/2026",
+   "Data EX": "18/11/2026",
+   "Data Liquidação": "08/12/2026",
+   "Dividendo por Cota": "",
+   "Dividend Yield": "",
+   "CDI": ""
+  },
+  {
+   "Ticker": "QQQI11",
+   "Data COM": "15/12/2026",
+   "Data EX": "16/12/2026",
+   "Data Liquidação": "11/01/2027",
+   "Dividendo por Cota": "",
+   "Dividend Yield": "",
+   "CDI": ""
+  }
+ ]
+}

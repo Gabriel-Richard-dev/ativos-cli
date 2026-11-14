@@ -4,6 +4,8 @@
   seguinte e fica em cache no diretório de dados, então cada dia é baixado uma vez.
 - Cotação do momento (com atraso de 15 minutos): serviço público de cotações da B3,
   usado como cotação-base provisória enquanto o COTAHIST do dia não sai.
+- ETFs: a lista de fundos de índice listados e os proventos em dinheiro de cada um
+  (os ETFs não publicam avisos estruturados no FundosNet, como os FIIs).
 """
 
 import base64
@@ -11,18 +13,33 @@ import io
 import json
 import threading
 import zipfile
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 from ativos_cli.errors import ParseError
 from ativos_cli.scraper.http import Http, HttpStatusError
+from ativos_cli.utils.dates import parse_date
+from ativos_cli.utils.money import to_decimal
 
 BASE_URL = "https://bvmf.bmfbovespa.com.br/InstDados/SerHist"
 QUOTE_URL = "https://cotacao.b3.com.br/mds/api/v1/instrumentQuotation"
 FUNDS_URL = "https://sistemaswebb3-listados.b3.com.br/fundsListedProxy/Search/GetListFunds"
+SUPPLEMENT_URL = (
+    "https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall/GetListedSupplementFunds"
+)
+# Categorias de ETF na B3: ações, renda fixa e fundos imobiliários.
+ETF_TYPES = ("ETF", "ETF-RF", "ETF-FII")
+# A B3 recusa páginas maiores que isso (responde lista vazia).
+ETF_PAGE_SIZE = 100
+# Código de "fundos" no serviço de proventos (vale para ETFs e FIIs).
+SUPPLEMENT_FUND_TYPE = 7
 # Mercado à vista: é onde as cotas de FII são negociadas.
 SPOT_MARKET = "010"
+# Mercados aceitos na cotação do momento: FIIs aparecem como "Vista", ETFs como "ETF"
+# e ETFs de renda fixa (ex.: IMAB11) como "RendaFixaPrivada".
+QUOTE_MARKETS = {"Vista", "ETF", "RendaFixaPrivada"}
 
 
 def cotahist_name(day: date) -> str:
@@ -66,23 +83,116 @@ def parse_fund_name(payload: bytes, ticker: str) -> str | None:
     return None
 
 
+def _encode(query: dict) -> str:
+    return base64.b64encode(json.dumps(query).encode()).decode()
+
+
+def etf_list_url(etf_type: str, page: int) -> str:
+    query = {"language": "pt-br", "pageNumber": page, "pageSize": ETF_PAGE_SIZE}
+    return f"{FUNDS_URL}/{_encode(query | {'keyword': '', 'typeFund': etf_type})}"
+
+
+def parse_etf_list(payload: bytes) -> tuple[dict[str, str], int]:
+    """Tickers (código + "11") e nomes de uma página da lista, e o total de páginas.
+
+    A B3 às vezes responde "0 registros" por engano; quem chama tenta de novo.
+    """
+    try:
+        data = json.loads(payload)
+        pages = int((data.get("page") or {}).get("totalPages") or 0)
+        results = data.get("results") or []
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise ParseError("Resposta inesperada da lista de ETFs da B3.") from exc
+    etfs = {}
+    for fund in results:
+        code = (fund.get("acronym") or "").strip().upper()
+        if len(code) != 4:
+            continue
+        name = " ".join((fund.get("fundName") or fund.get("tradingName") or code).split())
+        etfs[f"{code}11"] = name
+    return etfs, pages
+
+
+@dataclass(frozen=True)
+class Distribution:
+    """Provento em dinheiro de um ETF: data-com, valor por cota e pagamento."""
+
+    datacom: date
+    valor: Decimal
+    data_pagamento: date | None
+
+
+def supplement_url(ticker: str) -> str:
+    query = {"cnpj": "0", "identifierFund": ticker[:4], "typeFund": SUPPLEMENT_FUND_TYPE}
+    return f"{SUPPLEMENT_URL}/{_encode(query)}"
+
+
+def parse_distributions(payload: bytes, ticker: str) -> list[Distribution]:
+    """Proventos em dinheiro do ticker, da data-com mais nova para a mais antiga.
+
+    Amortizações ficam de fora. Proventos com a mesma data-com são somados. A B3 responde
+    vazio para fundos sem cadastro de proventos (ex.: ETFs de renda fixa): lista vazia.
+    """
+    if not payload.strip():
+        return []
+    try:
+        rows = json.loads(payload).get("cashDividends") or []
+    except (ValueError, AttributeError) as exc:
+        raise ParseError("Resposta inesperada dos proventos da B3.") from exc
+    by_date: dict[date, Distribution] = {}
+    for row in rows:
+        isin = (row.get("isinCode") or row.get("assetIssued") or "").upper()
+        if isin[2:6] != ticker[:4] or "AMORT" in (row.get("label") or "").upper():
+            continue
+        datacom = parse_date(row.get("lastDatePrior"))
+        valor = to_decimal(row.get("rate"))
+        if datacom is None or valor is None:
+            continue
+        previous = by_date.get(datacom)
+        by_date[datacom] = Distribution(
+            datacom=datacom,
+            valor=valor + (previous.valor if previous else 0),
+            data_pagamento=parse_date(row.get("paymentDate"))
+            or (previous.data_pagamento if previous else None),
+        )
+    return sorted(by_date.values(), key=lambda d: d.datacom, reverse=True)
+
+
 def quote_url(ticker: str) -> str:
     return f"{QUOTE_URL}/{ticker}"
 
 
+@dataclass(frozen=True)
+class Quote:
+    """Cotação do momento: último preço e variação do dia em % (`prcFlcn`)."""
+
+    price: Decimal
+    change_pct: Decimal | None = None
+
+
 def parse_quote(payload: bytes, ticker: str) -> Decimal | None:
-    """Último preço (`curPrc`) do ticker no mercado à vista, ou None sem negócios."""
+    """Último preço (`curPrc`) do ticker à vista (ou ETF), ou None sem negócios."""
+    quote = parse_quote_detail(payload, ticker)
+    return quote.price if quote else None
+
+
+def parse_quote_detail(payload: bytes, ticker: str) -> Quote | None:
+    """Último preço e variação do dia do ticker à vista (ou ETF), ou None sem negócios."""
     try:
         trades = json.loads(payload, parse_float=Decimal).get("Trad") or []
     except (ValueError, AttributeError) as exc:
         raise ParseError("Resposta inesperada do serviço de cotações da B3.") from exc
     for trade in trades:
         security = trade.get("scty") or {}
-        if security.get("symb") != ticker or (security.get("mkt") or {}).get("nm") != "Vista":
+        market = (security.get("mkt") or {}).get("nm")
+        if security.get("symb") != ticker or market not in QUOTE_MARKETS:
             continue
-        price = (security.get("SctyQtn") or {}).get("curPrc")
+        quotation = security.get("SctyQtn") or {}
+        price = quotation.get("curPrc")
         if isinstance(price, (int, Decimal)) and price > 0:
-            return Decimal(price)
+            change = quotation.get("prcFlcn")
+            valid_change = isinstance(change, (int, Decimal)) and not isinstance(change, bool)
+            return Quote(Decimal(price), Decimal(change) if valid_change else None)
     return None
 
 

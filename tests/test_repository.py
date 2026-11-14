@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ativos_cli.models import CatalogEntry, FetchStatus
+from ativos_cli.models import AssetType, CatalogEntry, FetchStatus, FundData
 from ativos_cli.repositories.asset_repository import AssetRepository
 from ativos_cli.repositories.database import MIGRATIONS, connect
 from tests.conftest import failed_result, ok_result
@@ -111,3 +111,28 @@ def test_snapshot_without_name_keeps_previous_name(repo, fetcher):
     repo.save_snapshot(fetcher.results["MXRF11"])
     repo.save_snapshot(ok_result("MXRF11").model_copy(update={"data": None}))
     assert repo.get_name("MXRF11") == "Maxi Renda"
+
+
+def test_catalog_keeps_asset_type(repo):
+    repo.replace_catalog(
+        [
+            CatalogEntry(ticker="KNCR11", name="Kinea"),
+            CatalogEntry(ticker="NDIV11", name="Nu Renda", asset_type=AssetType.ETF),
+        ]
+    )
+    assert repo.get_catalog_entry("NDIV11").asset_type == AssetType.ETF
+    assert repo.get_asset_type("NDIV11") == AssetType.ETF
+    assert repo.get_asset_type("KNCR11") == AssetType.FII
+    assert repo.get_asset_type("ZZZZ11") == AssetType.FII
+    # Adicionado à carteira antes de qualquer consulta: o tipo vem do catálogo.
+    repo.add_to_wallet("NDIV11")
+    assert repo.get_asset_type("NDIV11") == AssetType.ETF
+
+
+def test_snapshot_records_asset_type(repo):
+    data = FundData(ticker="NDIV11", name="Nu Renda", asset_type=AssetType.ETF)
+    repo.save_snapshot(ok_result("NDIV11", data))
+    assert repo.get_asset_type("NDIV11") == AssetType.ETF
+    # Uma falha depois não muda o tipo.
+    repo.save_snapshot(ok_result("NDIV11").model_copy(update={"data": None}))
+    assert repo.get_asset_type("NDIV11") == AssetType.ETF

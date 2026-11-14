@@ -7,6 +7,13 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 
+class AssetType(StrEnum):
+    """FII (avisos no FundosNet) ou ETF (proventos informados pela B3)."""
+
+    FII = "FII"
+    ETF = "ETF"
+
+
 class FundIdentity(BaseModel):
     """Nome e CNPJ de um fundo (o CNPJ localiza os avisos dele no FundosNet)."""
 
@@ -20,6 +27,7 @@ class FundData(BaseModel):
 
     ticker: str
     name: str | None = None
+    asset_type: AssetType = AssetType.FII
     datacom: date | None = None
     data_pagamento: date | None = None
     rendimento: Decimal | None = None
@@ -29,12 +37,16 @@ class FundData(BaseModel):
     # Cotação-base do dia, antes do fechamento oficial da B3 sair (manhã seguinte).
     cotacao_provisoria: bool = False
     cotacao_atual: Decimal | None = None
+    # Variação da cota no dia, em % (ETFs sem proventos).
+    variacao_dia: Decimal | None = None
     data_cotacao: date | None = None
     # Rendimento da data-com anterior à atual (o aviso anterior no FundosNet).
     datacom_anterior: date | None = None
     rendimento_anterior: Decimal | None = None
     rendimento_pct_anterior: Decimal | None = None
     cotacao_base_anterior: Decimal | None = None
+    # Próximas datas-com divulgadas pela gestora (ETFs), ainda sem valor ou não.
+    agenda: list[date] = Field(default_factory=list)
     # Documento de origem do rendimento (ex.: "aviso 1365016" do FundosNet).
     source_field: str | None = None
     notes: list[str] = Field(default_factory=list)
@@ -60,6 +72,7 @@ class FetchResult(BaseModel):
 class CatalogEntry(BaseModel):
     ticker: str
     name: str
+    asset_type: AssetType = AssetType.FII
     validated_at: datetime | None = None
 
 
@@ -78,10 +91,12 @@ class Snapshot(BaseModel):
     cotacao_base: Decimal | None = None
     cotacao_provisoria: bool = False
     cotacao_atual: Decimal | None = None
+    variacao_dia: Decimal | None = None
     datacom_anterior: date | None = None
     rendimento_anterior: Decimal | None = None
     rendimento_pct_anterior: Decimal | None = None
     cotacao_base_anterior: Decimal | None = None
+    agenda: list[date] = Field(default_factory=list)
     source_field: str | None = None
     error: str | None = None
 
@@ -98,6 +113,7 @@ class AssetView(BaseModel):
 
     ticker: str
     name: str | None = None
+    asset_type: AssetType = AssetType.FII
     status: DisplayStatus
     valid: Snapshot | None = None
     last_attempt: Snapshot | None = None

@@ -1,4 +1,5 @@
 from ativos_cli.models.asset import (
+    AssetType,
     AssetView,
     CatalogEntry,
     DisplayStatus,
@@ -10,6 +11,7 @@ from ativos_cli.models.asset import (
 )
 
 __all__ = [
+    "AssetType",
     "AssetView",
     "CatalogEntry",
     "DisplayStatus",

@@ -1,15 +1,44 @@
 # ATIVOS-CLI
 
 Acompanhe pelo terminal a **data-com**, o **rendimento por cota** e a
-**cotação-base** dos seus Fundos Imobiliários (FIIs). Os dados vêm do
-[fiis.com.br](https://fiis.com.br) e ficam salvos localmente em SQLite.
+**cotação-base** dos seus Fundos Imobiliários (FIIs) e ETFs que distribuem
+rendimentos. Os dados vêm das fontes oficiais da B3 e ficam salvos localmente em SQLite.
 
 ```text
 $ ativos
-  Ativo    Data-com     Rendimento   Rend. %   Cotação-base   Pagamento    │  Data-com ant.   Rend. ant.   Rend. % ant.
-  ───────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────
-  MXRF11   30/10/2026   R$ 0,095     1,0698%   R$ 8,88        16/11/2026   │  30/09/2026      R$ 0,10      1,0905%
-  KNCR11   30/10/2026   R$ 1,10      1,0478%   R$ 104,98      13/11/2026   │  30/09/2026      R$ 1,13      1,0620%
+  Novembro/2026
+
+  FIIs
+  Ativo    Data-com   Rendimento   Rend. %   Pagamento  │  Último   Rendimento   Rend. %
+  ──────────────────────────────────────────────────────┼───────────────────────────────
+  KNCR11   —          —                  —   —          │  30/10    R$ 1,10        1,05%
+  MXRF11   —          —                  —   —          │  30/10    R$ 0,095       1,07%
+
+  ETFs
+  Ativo    Data-com   Rendimento   Rend. %   Pagamento  │  Último   Rendimento   Rend. %
+  ──────────────────────────────────────────────────────┼───────────────────────────────
+  DIVD11   06/11      R$ 0,1825      0,32%   16/11      │  06/10    R$ 0,131       0,19%
+  NDIV11   09/11      R$ 0,1916      0,16%   16/11      │  07/10    R$ 0,1369      0,10%
+  QQQI11   17/11      a definir          —   08/12      │  20/10    R$ 1,0831      1,17%
+
+  Sem proventos
+  Ativo    Cotação         Dia
+  ────────────────────────────
+  BOVA11   R$ 169,80   ▲ 0,74%
+  IVVB11   R$ 483,68   ▼ 0,02%
+```
+
+Com `--completo` (`-c`), a carteira, a consulta e a pesquisa mostram a tabela inteira:
+cotação-base, valores sem arredondar, Rend. % com 4 casas e o rendimento anterior.
+
+```text
+$ ativos --completo
+
+  ETFs
+  Ativo    Data-com     Rendimento     Rend. %   Cotação-base   Pagamento   │  Data-com ant.   Rend. ant.     Rend. % ant.
+  ──────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────
+  DIVD11   06/11/2026   R$ 0,1825      0,3152%   R$ 57,89       16/11/2026  │  06/10/2026      R$ 0,131       0,1858%
+  NDIV11   09/11/2026   R$ 0,1916249   0,1642%   R$ 116,64      16/11/2026  │  07/10/2026      R$ 0,1368606   0,1020%
 ```
 
 ## Instalação
@@ -72,7 +101,16 @@ ativos catalog update        # baixa a lista de fundos usada na pesquisa
 ativos catalog status
 ```
 
-Todos os comandos só imprimem o resultado no terminal, numa tabela simples. As
+Todos os comandos só imprimem o resultado no terminal. Por padrão, numa tabela enxuta:
+datas sem o ano, rendimento com até 4 casas e Rend. % com 2. Quando o rendimento do mês
+ainda não saiu, as colunas do mês ficam com traços. Depois do divisor vem o
+último rendimento antes do do mês; com menos de 90 colunas, ele vai para uma tabela logo
+abaixo. As colunas ficam alinhadas entre FIIs e ETFs. Data-com de hoje em diante fica em destaque. Na tabela completa (`--completo`),
+vale o resto desta seção. Na
+carteira, os FIIs e os ETFs ficam em tabelas separadas (os títulos "FIIs" e "ETFs" só
+aparecem quando há ETFs), cada uma ordenada pela data-com, da mais antiga para a mais
+nova; ativos sem data-com ficam no fim. A pesquisa mostra FIIs e ETFs juntos, por
+relevância. O `--json` traz o campo `tipo` (`FII` ou `ETF`). As
 colunas "ant." trazem o rendimento da data-com anterior (data, valor e Rend. %), para
 comparar com o do mês. Em terminais com 122 colunas ou mais, elas ficam à direita de
 um divisor; em terminais menores, numa segunda tabela logo abaixo, para nenhuma linha
@@ -115,7 +153,29 @@ vez por fundo e guardado em cache:
    o antigo), pelo nome oficial do fundo na busca de fundos listados da B3.
 
 O aviso do FundosNet confirma o CNPJ: ele precisa trazer o ticker procurado. A lista de
-fundos da pesquisa vem do fiis.com.br.
+fundos da pesquisa vem do fiis.com.br (FIIs) e da B3 (ETFs).
+
+**ETFs** não publicam avisos estruturados no FundosNet. Para eles:
+
+| Campo exibido | Fonte |
+|---|---|
+| Quais tickers são ETF | Lista de ETFs listados da B3 (ações, renda fixa e imobiliários), guardada em cache por uma semana |
+| Data-com, Rendimento, Pagamento | Proventos em dinheiro do fundo no serviço de fundos listados da B3 ("último dia com" e valor por cota). Amortizações ficam de fora; proventos com a mesma data-com são somados |
+| Cotação-base | COTAHIST da B3, como nos FIIs; antes dele sair, a cotação do momento da B3, marcada com `*` |
+| Data-com ant., Rend. ant., Rend. % ant. | O provento anterior na mesma lista |
+| Próximas datas-com (ETFs da Buena Vista, ex.: QQQI11) | Agenda de distribuição publicada no [site da gestora](https://www.buenavista.capital/qqqi11-rentabilidade/) |
+
+Muitos ETFs só declaram o valor no próprio dia da data-com. Para os da Buena Vista, a
+gestora divulga antes as datas dos próximos meses: enquanto o mês não tem provento
+declarado na B3, a tabela já mostra a data-com prevista e o pagamento, com o
+rendimento "a definir". O `--detalhes` e o `--json` (`agenda`) listam as próximas
+datas-com. Se o site da gestora falhar, vale só o que a B3 informa.
+
+ETFs que não distribuem rendimentos (ex.: BOVA11, que reinveste os dividendos) ficam
+numa tabela "Sem proventos" no fim, com a cotação do momento e a variação do dia
+(▲ alta, ▼ queda), da maior alta para a maior queda. Os dois vêm do serviço de cotações
+da B3 (`cotacao_atual` e `variacao_dia` no `--json`). Quem distribui ou não é a própria B3
+que informa: a lista de proventos dela para o ETF vem vazia.
 
 **Cache e desempenho:** CNPJ, avisos já lidos (um aviso publicado não muda) e os
 arquivos de cotações ficam em cache no diretório de dados (`cache/`). Numa atualização
@@ -173,7 +233,7 @@ src/ativos_cli/
 ├── config.py          # caminhos, URLs, limites de acesso
 ├── models/            # modelos Pydantic
 ├── services/          # regras de negócio, cache e pesquisa
-├── scraper/           # FundosNet, cotações da B3, fiis.com.br (CNPJ e catálogo) e HTTP
+├── scraper/           # FundosNet, B3 (cotações e ETFs), agenda da Buena Vista, fiis.com.br e HTTP
 ├── repositories/      # SQLite: carteira, snapshots, catálogo
 ├── ui/                # tema, tabelas, prompts e tela da carteira
 └── utils/             # datas e valores monetários

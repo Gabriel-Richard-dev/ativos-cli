@@ -14,7 +14,7 @@ from rich.text import Text
 
 from ativos_cli import __version__, config
 from ativos_cli.errors import AtivosError
-from ativos_cli.models import AssetView, DisplayStatus, FetchResult, FetchStatus
+from ativos_cli.models import AssetType, AssetView, DisplayStatus, FetchResult, FetchStatus
 from ativos_cli.repositories.asset_repository import AssetRepository
 from ativos_cli.repositories.database import connect
 from ativos_cli.scraper import statusinvest
@@ -26,8 +26,11 @@ from ativos_cli.services.search_service import SearchService
 from ativos_cli.ui import prompts
 from ativos_cli.ui.tables import (
     asset_title,
+    compact_list,
     details_panel,
     fetch_note,
+    group_by_type,
+    month_title,
     plain_table,
 )
 from ativos_cli.ui.theme import make_console
@@ -40,6 +43,7 @@ EPILOG = """\
 [bold]Exemplos[/bold]
 
   ativos                      atualiza e mostra a carteira
+  ativos --completo           carteira com todas as colunas
   ativos MXRF11               consulta um ativo
   ativos search "maxi renda"  pesquisa por nome ou ticker aproximado
   ativos add KNCR11           adiciona à carteira
@@ -47,12 +51,12 @@ EPILOG = """\
   ativos refresh              atualiza todos os ativos da carteira
   ativos catalog update       baixa o catálogo usado na pesquisa
 
-Fonte dos dados: fiis.com.br
+Fontes dos dados: B3 (FundosNet, proventos e cotações), fiis.com.br e Status Invest
 """
 
 app = typer.Typer(
     name="ativos",
-    help="Acompanhe datas-com, rendimentos e cotações-base de FIIs pelo terminal.",
+    help="Acompanhe datas-com, rendimentos e cotações-base de FIIs e ETFs pelo terminal.",
     epilog=EPILOG,
     rich_markup_mode="rich",
     add_completion=False,
@@ -60,6 +64,9 @@ app = typer.Typer(
 )
 catalog_app = typer.Typer(help="Catálogo local de ativos usado na pesquisa.", no_args_is_help=True)
 app.add_typer(catalog_app, name="catalog")
+
+
+FULL_HELP = "Tabela completa: cotação-base, valores sem arredondar e o rendimento anterior."
 
 
 def today() -> date:
@@ -135,6 +142,7 @@ def main(
     version: bool = typer.Option(
         False, "--version", "-V", callback=_version, is_eager=True, help="Mostra a versão."
     ),
+    full: bool = typer.Option(False, "--completo", "-c", help=FULL_HELP),
 ) -> None:
     """Sem argumentos, atualiza a carteira e mostra seus ativos."""
     global _state
@@ -142,7 +150,7 @@ def main(
     if debug:
         logging.basicConfig(level=logging.DEBUG, format="%(name)s: %(message)s")
     if ctx.invoked_subcommand is None:
-        open_wallet(_state)
+        open_wallet(_state, full)
 
 
 # --- consulta individual -------------------------------------------------------
@@ -157,6 +165,7 @@ def view_to_dict(view: AssetView) -> dict:
     return {
         "ticker": view.ticker,
         "nome": view.name,
+        "tipo": view.asset_type.value,
         "datacom": snap.datacom.isoformat() if snap and snap.datacom else None,
         "rendimento": str(snap.rendimento) if snap and snap.rendimento is not None else None,
         "cotacao_base": str(snap.cotacao_base) if snap and snap.cotacao_base is not None else None,
@@ -173,6 +182,9 @@ def view_to_dict(view: AssetView) -> dict:
         "rendimento_anterior": _str(snap.rendimento_anterior if snap else None),
         "rendimento_pct_anterior": _str(snap.rendimento_pct_anterior if snap else None),
         "cotacao_base_anterior": _str(snap.cotacao_base_anterior if snap else None),
+        "agenda": [d.isoformat() for d in snap.agenda] if snap else [],
+        "cotacao_atual": _str(snap.cotacao_atual if snap else None),
+        "variacao_dia": _str(snap.variacao_dia if snap else None),
         "status": view.status.name.lower(),
         "desatualizado": view.stale,
         "consultado_em": snap.fetched_at.isoformat() if snap else None,
@@ -186,13 +198,29 @@ def print_json(state: State, payload) -> None:
     state.console.print_json(json.dumps(payload, ensure_ascii=False))
 
 
-def show_asset(state: State, raw_ticker: str, details: bool = False) -> AssetView:
+def print_views(state: State, groups: list[tuple[str | None, list[AssetView]]], full: bool) -> None:
+    """Lista enxuta por padrão; com `full`, a tabela completa de cada grupo."""
+    console = state.console
+    if not full:
+        console.print(compact_list(groups, today(), console.width))
+        return
+    for number, (title, views) in enumerate(groups):
+        if title:
+            if number:
+                console.print()
+            console.print(Text(f"  {title}", style="bold"))
+        console.print(plain_table(views, console.width, today()))
+
+
+def show_asset(
+    state: State, raw_ticker: str, details: bool = False, full: bool = False
+) -> AssetView:
     console = state.console
     ticker = normalize_ticker(raw_ticker)
     with console.status(f"Buscando {ticker}..."):
         view = state.service.lookup(ticker)
 
-    console.print(plain_table([view], console.width, today()))
+    print_views(state, [(None, [view])], full)
     if view.status != DisplayStatus.UPDATED and (note := fetch_note(view)):
         console.print(note)
     if details:
@@ -206,13 +234,14 @@ def show_asset(state: State, raw_ticker: str, details: bool = False) -> AssetVie
 def show_command(
     ticker: str = typer.Argument(..., help="Ticker do ativo, ex.: MXRF11."),
     details: bool = typer.Option(False, "--detalhes", "-d", help="Mostra todos os detalhes."),
+    full: bool = typer.Option(False, "--completo", "-c", help=FULL_HELP),
     as_json: bool = typer.Option(False, "--json", help="Saída em JSON, para scripts."),
 ) -> None:
     """Consulta um ativo (o mesmo que [bold]ativos TICKER[/bold])."""
     if as_json:
         print_json(_state, view_to_dict(_state.service.lookup(ticker)))
     else:
-        show_asset(_state, ticker, details=details)
+        show_asset(_state, ticker, details=details, full=full)
 
 
 # --- carteira --------------------------------------------------------------------
@@ -298,6 +327,7 @@ def refresh_with_progress(state: State, tickers: list[str] | None):
 @handle_errors
 def refresh_command(
     ticker: str | None = typer.Argument(None, help="Atualiza só este ativo."),
+    full: bool = typer.Option(False, "--completo", "-c", help=FULL_HELP),
     as_json: bool = typer.Option(False, "--json", help="Saída em JSON, para scripts."),
 ) -> None:
     """Atualiza os dados da carteira (ou de um ativo) e mostra o resumo."""
@@ -310,15 +340,29 @@ def refresh_command(
     if as_json:
         print_json(_state, [view_to_dict(v) for v in summary.views])
     else:
-        print_summary(_state, summary)
+        print_summary(_state, summary, full)
     if summary.failed:
         raise typer.Exit(1)
 
 
-def print_summary(state: State, summary) -> None:
-    """Tabela simples dos ativos atualizados, com as falhas listadas embaixo."""
+GROUP_TITLES = {AssetType.FII: "FIIs", AssetType.ETF: "ETFs"}
+
+
+def print_summary(state: State, summary, full: bool = False) -> None:
+    """O mês no topo, FIIs e ETFs separados, cada grupo por data-com, e as falhas embaixo.
+
+    Só com FIIs, a lista sai sem títulos de grupo, como antes de haver ETFs.
+    """
     console = state.console
-    console.print(plain_table(summary.views, console.width, today()))
+    groups = group_by_type(summary.views, today())
+    titled = any(asset_type != AssetType.FII for asset_type, _ in groups)
+    console.print(Text(f"  {month_title(today())}", style="bold"))
+    console.print()
+    print_views(
+        state,
+        [(GROUP_TITLES[t] if titled else None, views) for t, views in groups],
+        full,
+    )
     for view in summary.failed:
         error = view.last_error or "sem dados"
         console.print(Text(f"  {view.ticker}: {error}", style="fail"))
@@ -355,13 +399,13 @@ def history_command(
     _state.console.print(table)
 
 
-def open_wallet(state: State) -> None:
+def open_wallet(state: State, full: bool = False) -> None:
     if not state.service.repo.wallet_tickers():
         state.console.print(
             Text("  Sua carteira está vazia. Use: ativos add TICKER", style="muted")
         )
         return
-    print_summary(state, refresh_with_progress(state, None))
+    print_summary(state, refresh_with_progress(state, None), full)
 
 
 # --- pesquisa ----------------------------------------------------------------------
@@ -416,7 +460,7 @@ def search_date(view: AssetView | None) -> str | None:
     return view.valid.datacom.isoformat()
 
 
-def run_search(state: State, term: str, as_json: bool = False) -> None:
+def run_search(state: State, term: str, as_json: bool = False, full: bool = False) -> None:
     console = state.console
     if not refresh_catalog_for_search(state):
         if is_valid_ticker(normalize_ticker(term)):
@@ -444,24 +488,25 @@ def run_search(state: State, term: str, as_json: bool = False) -> None:
         if is_valid_ticker(normalize_ticker(term)):
             console.print(Text(f"  Tente consultar direto: ativos {term.upper()}", style="muted"))
         return
-    console.print(plain_table([views[h.entry.ticker] for h in hits], console.width, today()))
+    print_views(state, [(None, [views[h.entry.ticker] for h in hits])], full)
 
 
 @app.command("search")
 @handle_errors
 def search_command(
     term: list[str] = typer.Argument(..., help="Ticker ou nome aproximado."),
+    full: bool = typer.Option(False, "--completo", "-c", help=FULL_HELP),
     as_json: bool = typer.Option(False, "--json", help="Saída em JSON, para scripts."),
 ) -> None:
-    """Pesquisa ativos por ticker ou nome aproximado no fiis.com.br."""
+    """Pesquisa FIIs e ETFs por ticker ou nome aproximado."""
     text = " ".join(term)
-    run_search(_state, text, as_json=as_json)
+    run_search(_state, text, as_json=as_json, full=full)
 
 
 @catalog_app.command("update")
 @handle_errors
 def catalog_update_command() -> None:
-    """Baixa a lista de fundos do fiis.com.br para a pesquisa."""
+    """Baixa a lista de FIIs (fiis.com.br) e de ETFs (B3) para a pesquisa."""
     update_catalog(_state)
 
 

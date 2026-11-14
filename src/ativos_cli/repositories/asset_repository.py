@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from ativos_cli.errors import DatabaseError
-from ativos_cli.models import CatalogEntry, FetchResult, FetchStatus, Snapshot
+from ativos_cli.models import AssetType, CatalogEntry, FetchResult, FetchStatus, Snapshot
 from ativos_cli.utils.dates import now_utc, parse_date
 
 
@@ -39,13 +39,38 @@ class AssetRepository:
 
     # --- ativos e carteira -------------------------------------------------
 
-    def _ensure_asset(self, conn: sqlite3.Connection, ticker: str, name: str | None) -> int:
+    def _ensure_asset(
+        self,
+        conn: sqlite3.Connection,
+        ticker: str,
+        name: str | None,
+        asset_type: AssetType | None = None,
+    ) -> int:
+        """Cria o ativo se preciso. Sem `asset_type`, mantém o tipo gravado (ou o do catálogo)."""
+        initial = asset_type or self._catalog_type(conn, ticker) or AssetType.FII
         conn.execute(
-            "INSERT INTO assets (ticker, name, created_at) VALUES (?, ?, ?)"
+            "INSERT INTO assets (ticker, name, asset_type, created_at) VALUES (?, ?, ?, ?)"
             " ON CONFLICT(ticker) DO UPDATE SET name = COALESCE(excluded.name, assets.name)",
-            (ticker, name, now_utc().isoformat()),
+            (ticker, name, initial.value, now_utc().isoformat()),
         )
+        if asset_type is not None:
+            conn.execute(
+                "UPDATE assets SET asset_type = ? WHERE ticker = ?", (asset_type.value, ticker)
+            )
         return conn.execute("SELECT id FROM assets WHERE ticker = ?", (ticker,)).fetchone()[0]
+
+    @staticmethod
+    def _catalog_type(conn: sqlite3.Connection, ticker: str) -> AssetType | None:
+        row = conn.execute("SELECT asset_type FROM catalog WHERE ticker = ?", (ticker,)).fetchone()
+        return AssetType(row[0]) if row else None
+
+    def get_asset_type(self, ticker: str) -> AssetType:
+        """Tipo gravado do ativo; sem registro, o do catálogo; sem nada, FII."""
+        rows = self._query("SELECT asset_type FROM assets WHERE ticker = ?", (ticker,))
+        if rows:
+            return AssetType(rows[0]["asset_type"])
+        entry = self.get_catalog_entry(ticker)
+        return entry.asset_type if entry else AssetType.FII
 
     def get_name(self, ticker: str) -> str | None:
         rows = self._query("SELECT name FROM assets WHERE ticker = ?", (ticker,))
@@ -93,14 +118,19 @@ class AssetRepository:
         """Grava a coleta (sucesso ou falha). Falhas nunca sobrescrevem dados válidos."""
         data = result.data if result.status == FetchStatus.OK else None
         with self._tx() as conn:
-            asset_id = self._ensure_asset(conn, result.ticker, data.name if data else None)
+            asset_id = self._ensure_asset(
+                conn,
+                result.ticker,
+                data.name if data else None,
+                data.asset_type if data else None,
+            )
             cur = conn.execute(
                 """INSERT INTO asset_snapshots
                    (asset_id, status, datacom, data_pagamento, rendimento, rendimento_pct,
                     cotacao_base, cotacao_provisoria, cotacao_atual, datacom_anterior,
                     rendimento_anterior, rendimento_pct_anterior, cotacao_base_anterior,
-                    source_field, source_url, fetched_at, error)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    agenda, variacao_dia, source_field, source_url, fetched_at, error)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     asset_id,
                     result.status.value,
@@ -115,6 +145,8 @@ class AssetRepository:
                     _dec(data.rendimento_anterior) if data else None,
                     _dec(data.rendimento_pct_anterior) if data else None,
                     _dec(data.cotacao_base_anterior) if data else None,
+                    ",".join(d.isoformat() for d in data.agenda) if data and data.agenda else None,
+                    _dec(data.variacao_dia) if data else None,
                     data.source_field if data else None,
                     result.source_url,
                     result.fetched_at.isoformat(),
@@ -170,10 +202,12 @@ class AssetRepository:
             cotacao_base=dec("cotacao_base"),
             cotacao_provisoria=bool(row["cotacao_provisoria"]),
             cotacao_atual=dec("cotacao_atual"),
+            variacao_dia=dec("variacao_dia"),
             datacom_anterior=parse_date(row["datacom_anterior"]),
             rendimento_anterior=dec("rendimento_anterior"),
             rendimento_pct_anterior=dec("rendimento_pct_anterior"),
             cotacao_base_anterior=dec("cotacao_base_anterior"),
+            agenda=[parse_date(d) for d in (row["agenda"] or "").split(",") if d],
             source_field=row["source_field"],
             error=row["error"],
         )
@@ -185,10 +219,10 @@ class AssetRepository:
         now = now_utc().isoformat()
         with self._tx() as conn:
             conn.executemany(
-                "INSERT INTO catalog (ticker, name, updated_at) VALUES (?, ?, ?)"
+                "INSERT INTO catalog (ticker, name, asset_type, updated_at) VALUES (?, ?, ?, ?)"
                 " ON CONFLICT(ticker) DO UPDATE SET name = excluded.name,"
-                " updated_at = excluded.updated_at",
-                [(e.ticker, e.name, now) for e in entries],
+                " asset_type = excluded.asset_type, updated_at = excluded.updated_at",
+                [(e.ticker, e.name, e.asset_type.value, now) for e in entries],
             )
             conn.execute(
                 "INSERT INTO meta (key, value) VALUES ('catalog_updated_at', ?)"
@@ -196,23 +230,30 @@ class AssetRepository:
                 (now,),
             )
 
-    def mark_validated(self, ticker: str, name: str | None) -> None:
+    def mark_validated(
+        self, ticker: str, name: str | None, asset_type: AssetType = AssetType.FII
+    ) -> None:
         """Registra que a página do ativo foi consultada com sucesso."""
         now = now_utc().isoformat()
         with self._tx() as conn:
             conn.execute(
-                "INSERT INTO catalog (ticker, name, updated_at, validated_at) VALUES (?, ?, ?, ?)"
-                " ON CONFLICT(ticker) DO UPDATE SET validated_at = excluded.validated_at",
-                (ticker, name or ticker, now, now),
+                "INSERT INTO catalog (ticker, name, asset_type, updated_at, validated_at)"
+                " VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(ticker) DO UPDATE SET validated_at = excluded.validated_at,"
+                " asset_type = excluded.asset_type",
+                (ticker, name or ticker, asset_type.value, now, now),
             )
 
     def list_catalog(self) -> list[CatalogEntry]:
-        rows = self._query("SELECT ticker, name, validated_at FROM catalog ORDER BY ticker")
+        rows = self._query(
+            "SELECT ticker, name, asset_type, validated_at FROM catalog ORDER BY ticker"
+        )
         return [self._to_entry(r) for r in rows]
 
     def get_catalog_entry(self, ticker: str) -> CatalogEntry | None:
         rows = self._query(
-            "SELECT ticker, name, validated_at FROM catalog WHERE ticker = ?", (ticker,)
+            "SELECT ticker, name, asset_type, validated_at FROM catalog WHERE ticker = ?",
+            (ticker,),
         )
         return self._to_entry(rows[0]) if rows else None
 
@@ -226,5 +267,6 @@ class AssetRepository:
         return CatalogEntry(
             ticker=row["ticker"],
             name=row["name"],
+            asset_type=AssetType(row["asset_type"]),
             validated_at=datetime.fromisoformat(validated) if validated else None,
         )

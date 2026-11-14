@@ -57,6 +57,11 @@ MIGRATIONS = [
     ALTER TABLE asset_snapshots ADD COLUMN rendimento_pct_anterior TEXT;
     ALTER TABLE asset_snapshots ADD COLUMN cotacao_base_anterior TEXT;
     """,
+    # ETFs no catálogo da pesquisa (a tabela `assets` já tinha o tipo).
+    "ALTER TABLE catalog ADD COLUMN asset_type TEXT NOT NULL DEFAULT 'FII';",
+    # Próximas datas-com divulgadas pela gestora, em ISO separadas por vírgula.
+    "ALTER TABLE asset_snapshots ADD COLUMN agenda TEXT;",
+    "ALTER TABLE asset_snapshots ADD COLUMN variacao_dia TEXT;",
 ]
 
 

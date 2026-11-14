@@ -67,6 +67,7 @@ class AssetService:
         return AssetView(
             ticker=ticker,
             name=self.repo.get_name(ticker),
+            asset_type=self.repo.get_asset_type(ticker),
             status=status,
             valid=valid,
             last_attempt=attempt,
@@ -77,7 +78,7 @@ class AssetService:
     def _record(self, result: FetchResult) -> AssetView:
         self.repo.save_snapshot(result)
         if result.status == FetchStatus.OK and result.data:
-            self.repo.mark_validated(result.ticker, result.data.name)
+            self.repo.mark_validated(result.ticker, result.data.name, result.data.asset_type)
         return self.view(result.ticker, updated_now=result.status == FetchStatus.OK)
 
     def lookup(self, raw_ticker: str) -> AssetView:

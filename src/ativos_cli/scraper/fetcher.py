@@ -16,6 +16,12 @@ Para cada ticker:
    marcada como provisória. O Rend. % é o valor dividido pela cotação-base, cortado
    em 4 casas (como o Status Invest).
 
+ETFs seguem outro caminho: a lista de ETFs da B3 (cache semanal) diz quais tickers são
+ETF, e os proventos em dinheiro vêm do serviço de proventos da B3 (data-com, valor e
+pagamento). A cotação-base vem do COTAHIST ou, antes dele sair, da cotação do momento.
+Para ETFs da Buena Vista, a agenda da gestora traz as próximas datas-com antes de o
+valor ser declarado.
+
 Os tickers são consultados em paralelo (até `config.PARALLEL_REQUESTS`); dentro de
 cada ticker as etapas são sequenciais, porque cada uma depende da anterior.
 """
@@ -23,6 +29,7 @@ cada ticker as etapas são sequenciais, porque cada uma depende da anterior.
 import json
 import logging
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from decimal import Decimal
@@ -30,8 +37,15 @@ from pathlib import Path
 
 from ativos_cli import config
 from ativos_cli.errors import AtivosError
-from ativos_cli.models import CatalogEntry, FetchResult, FetchStatus, FundData, FundIdentity
-from ativos_cli.scraper import b3, cvm, fundosnet, statusinvest
+from ativos_cli.models import (
+    AssetType,
+    CatalogEntry,
+    FetchResult,
+    FetchStatus,
+    FundData,
+    FundIdentity,
+)
+from ativos_cli.scraper import b3, buenavista, cvm, fundosnet, statusinvest
 from ativos_cli.scraper.b3 import ClosingPrices
 from ativos_cli.scraper.http import Http, HttpStatusError
 from ativos_cli.scraper.parser import parse_catalog, parse_fund_identity
@@ -42,6 +56,15 @@ from ativos_cli.utils.money import truncate, yield_percent
 log = logging.getLogger(__name__)
 
 YIELD_PLACES = 4
+# A lista de ETFs muda pouco: baixada de novo uma vez por semana.
+ETF_LIST_REFRESH_SECONDS = 7 * 24 * 3600
+# A B3 às vezes responde a lista vazia por engano; tenta de novo algumas vezes.
+ETF_LIST_ATTEMPTS = 3
+
+
+def local_today() -> date:
+    """Hoje (os testes substituem para fixar a data)."""
+    return date.today()
 
 
 class JsonCache:
@@ -83,6 +106,9 @@ class OfficialFetcher:
         self.notices = JsonCache(cache_dir / "avisos.json")
         self.cards = JsonCache(cache_dir / "statusinvest.json")
         self.registry = cvm.Registry(self.http, cache_dir / "cvm")
+        self.etf_cache = JsonCache(cache_dir / "etfs.json")
+        self._etfs: dict[str, str] | None = None
+        self._etfs_lock = threading.Lock()
 
     # --- Fetcher ---------------------------------------------------------------
 
@@ -104,7 +130,151 @@ class OfficialFetcher:
         return [results[t] for t in tickers]
 
     def fetch_catalog(self) -> list[CatalogEntry]:
-        return parse_catalog(self.http.get(config.CATALOG_URL).decode("utf-8", "replace"))
+        """FIIs do fiis.com.br mais os ETFs da B3 (sem a lista de ETFs, só os FIIs)."""
+        fiis = parse_catalog(self.http.get(config.CATALOG_URL).decode("utf-8", "replace"))
+        try:
+            etfs = self.etfs(refresh=True)
+        except AtivosError as exc:
+            log.debug("Lista de ETFs indisponível: %s", exc)
+            etfs = {}
+        entries = {e.ticker: e for e in fiis}
+        for ticker, name in etfs.items():
+            entries[ticker] = CatalogEntry(ticker=ticker, name=name, asset_type=AssetType.ETF)
+        return sorted(entries.values(), key=lambda e: e.ticker)
+
+    # --- ETFs ------------------------------------------------------------------
+
+    def etfs(self, refresh: bool = False) -> dict[str, str]:
+        """Tickers e nomes dos ETFs listados na B3 (cache em disco por uma semana).
+
+        Sem a lista (B3 fora do ar e nada em cache), levanta AtivosError uma vez e, no
+        resto da execução, considera que não há ETFs, para não tentar a cada ticker.
+        """
+        with self._etfs_lock:
+            if self._etfs is not None and not refresh:
+                return self._etfs
+            cached = self.etf_cache.get("etfs")
+            age = time.time() - (self.etf_cache.get("updated_at") or 0)
+            if cached and age < ETF_LIST_REFRESH_SECONDS and not refresh:
+                self._etfs = cached
+                return cached
+            try:
+                etfs = self._download_etfs()
+            except AtivosError:
+                if not cached:
+                    self._etfs = {}
+                    raise
+                etfs = cached  # lista antiga vale mais que nenhuma
+            else:
+                self.etf_cache.set("etfs", etfs)
+                self.etf_cache.set("updated_at", time.time())
+            self._etfs = etfs
+            return etfs
+
+    def _download_etfs(self) -> dict[str, str]:
+        """Todas as categorias de ETF; uma categoria com falha não impede as outras."""
+        etfs: dict[str, str] = {}
+        error: AtivosError | None = None
+        for etf_type in b3.ETF_TYPES:
+            try:
+                etfs |= self._download_etf_type(etf_type)
+            except AtivosError as exc:
+                log.debug("Lista de %s indisponível: %s", etf_type, exc)
+                error = exc
+        if not etfs:
+            raise error or AtivosError("A B3 não informou a lista de ETFs.")
+        return etfs
+
+    def _download_etf_type(self, etf_type: str) -> dict[str, str]:
+        etfs: dict[str, str] = {}
+        page, pages = 1, 1
+        while page <= pages:
+            for _ in range(ETF_LIST_ATTEMPTS):
+                found, pages = b3.parse_etf_list(self.http.get(b3.etf_list_url(etf_type, page)))
+                if pages:
+                    break
+            etfs |= found
+            page += 1
+        return etfs
+
+    def _is_etf(self, ticker: str) -> bool:
+        try:
+            return ticker in self.etfs()
+        except AtivosError as exc:  # sem a lista, segue como FII
+            log.debug("Lista de ETFs indisponível: %s", exc)
+            return False
+
+    def _fetch_etf(self, result: FetchResult) -> FetchResult:
+        ticker = result.ticker
+        result.source_url = b3.supplement_url(ticker)
+        try:
+            data = self._etf_data(ticker)
+        except AtivosError as exc:
+            result.error = str(exc)
+            return result
+        except Exception as exc:  # nunca derruba a coleta dos outros tickers
+            log.debug("Falha inesperada em %s", ticker, exc_info=True)
+            result.error = f"Falha inesperada: {exc}"
+            return result
+        result.data = data
+        result.status = FetchStatus.OK
+        return result
+
+    def _etf_data(self, ticker: str) -> FundData:
+        """Proventos da B3 e, se a gestora divulgar, as próximas datas-com previstas.
+
+        Enquanto o mês atual não tem provento declarado na B3, a próxima data-com prevista
+        vira a data-com atual, com o rendimento em aberto (None) até ser declarado, e o
+        último provento da B3 vira o anterior. Declarado o do mês, ele volta a valer.
+        """
+        name = self.etfs().get(ticker)
+        data = FundData(ticker=ticker, name=name, asset_type=AssetType.ETF)
+        distributions = b3.parse_distributions(self.http.get(b3.supplement_url(ticker)), ticker)
+        declared = [(d.datacom, d.valor, d.data_pagamento) for d in distributions]
+        source = "proventos B3"
+
+        today = local_today()
+        schedule = self._etf_schedule(ticker, name)
+        latest = declared[0][0] if declared else None
+        if latest is None or latest < today.replace(day=1):
+            pending = [s for s in schedule if latest is None or s.datacom > latest]
+            if pending:
+                first = pending[0]
+                declared.insert(0, (first.datacom, first.valor, first.data_pagamento))
+                source = "agenda da gestora"
+        data.agenda = [s.datacom for s in schedule if s.datacom >= today]
+
+        if not declared:
+            data.notes.append("Nenhum provento em dinheiro informado pela B3.")
+            # Sem proventos, o que interessa é como a cota está indo no dia.
+            quote = self._current_quote(ticker)
+            if quote:
+                data.cotacao_atual = quote.price
+                data.variacao_dia = quote.change_pct
+                data.data_cotacao = today
+            return data
+        datacom, valor, pagamento = declared[0]
+        data.datacom = datacom
+        data.rendimento = valor
+        data.data_pagamento = pagamento
+        data.source_field = source
+        # Cotação-base só existe a partir da data-com, e o Rend. % só com o valor.
+        if valor is not None and datacom <= today:
+            self._fill_base_price(data, ticker, datacom, valor)
+        if len(declared) > 1:
+            previous_datacom, previous_valor, _ = declared[1]
+            self._fill_previous(data, ticker, previous_datacom, previous_valor)
+        return data
+
+    def _etf_schedule(self, ticker: str, name: str | None) -> list[buenavista.Scheduled]:
+        """Agenda divulgada pela gestora; sem ela (ou com falha), lista vazia."""
+        if not buenavista.manages(name):
+            return []
+        try:
+            return buenavista.parse_schedule(self.http.get(buenavista.schedule_url(ticker)), ticker)
+        except AtivosError as exc:
+            log.debug("Agenda da gestora indisponível para %s: %s", ticker, exc)
+            return []
 
     # --- um ticker -------------------------------------------------------------
 
@@ -115,6 +285,8 @@ class OfficialFetcher:
             source_url=config.fund_url(ticker),
             fetched_at=now_utc(),
         )
+        if self._is_etf(ticker):
+            return self._fetch_etf(result)
         try:
             identity = self._identity(ticker)
         except HttpStatusError as exc:
@@ -178,24 +350,35 @@ class OfficialFetcher:
             data.notes.append("Nenhum aviso de rendimentos encontrado no FundosNet.")
             return data
         if previous is not None:
-            self._fill_previous(data, identity.ticker, previous)
+            self._fill_previous(data, identity.ticker, previous.datacom, previous.valor)
         data.datacom = dividend.datacom
         data.rendimento = dividend.valor
         data.data_pagamento = dividend.data_pagamento
         data.source_field = f"aviso {dividend.notice_id}"
-        data.cotacao_base = self.prices.close(identity.ticker, dividend.datacom)
-        if data.cotacao_base is None:
-            # Fechamento oficial ainda não publicado: o Status Invest já tem o do pregão.
-            if card := self._status_invest_card(identity.ticker, dividend.datacom):
-                data.cotacao_base = card.cotacao_base
-                data.rendimento_pct = card.rendimento_pct
-                return data
-            data.cotacao_base = self._current_price(identity.ticker)
-            data.cotacao_provisoria = data.cotacao_base is not None
-        data.rendimento_pct = truncate(
-            yield_percent(dividend.valor, data.cotacao_base), YIELD_PLACES
+        self._fill_base_price(
+            data, identity.ticker, dividend.datacom, dividend.valor, status_invest=True
         )
         return data
+
+    def _fill_base_price(
+        self,
+        data: FundData,
+        ticker: str,
+        datacom: date,
+        valor: Decimal,
+        status_invest: bool = False,
+    ) -> None:
+        """Cotação-base e Rend. %: fechamento oficial; antes dele, a melhor estimativa."""
+        data.cotacao_base = self.prices.close(ticker, datacom)
+        if data.cotacao_base is None:
+            # Fechamento oficial ainda não publicado: o Status Invest já tem o do pregão.
+            if status_invest and (card := self._status_invest_card(ticker, datacom)):
+                data.cotacao_base = card.cotacao_base
+                data.rendimento_pct = card.rendimento_pct
+                return
+            data.cotacao_base = self._current_price(ticker)
+            data.cotacao_provisoria = data.cotacao_base is not None
+        data.rendimento_pct = truncate(yield_percent(valor, data.cotacao_base), YIELD_PLACES)
 
     def _status_invest_card(self, ticker: str, datacom: date) -> statusinvest.Card | None:
         """Card do Status Invest com a mesma data-com e cotação-base, se houver.
@@ -240,16 +423,24 @@ class OfficialFetcher:
             log.debug("Cotação provisória de %s indisponível: %s", ticker, exc)
             return None
 
-    def _fill_previous(self, data: FundData, ticker: str, previous: fundosnet.Dividend) -> None:
-        data.datacom_anterior = previous.datacom
-        data.rendimento_anterior = previous.valor
+    def _current_quote(self, ticker: str) -> b3.Quote | None:
+        """Cotação e variação do dia na B3; sem elas, a linha fica sem esses dados."""
         try:
-            data.cotacao_base_anterior = self.prices.close(ticker, previous.datacom)
+            return b3.parse_quote_detail(self.http.get(b3.quote_url(ticker)), ticker)
+        except AtivosError as exc:
+            log.debug("Cotação de %s indisponível: %s", ticker, exc)
+            return None
+
+    def _fill_previous(self, data: FundData, ticker: str, datacom: date, valor: Decimal) -> None:
+        data.datacom_anterior = datacom
+        data.rendimento_anterior = valor
+        try:
+            data.cotacao_base_anterior = self.prices.close(ticker, datacom)
         except AtivosError as exc:  # sem a cotação anterior, o resto da linha continua valendo
             log.debug("Cotação-base anterior de %s indisponível: %s", ticker, exc)
             return
         data.rendimento_pct_anterior = truncate(
-            yield_percent(previous.valor, data.cotacao_base_anterior), YIELD_PLACES
+            yield_percent(valor, data.cotacao_base_anterior), YIELD_PLACES
         )
 
     def _latest_dividends(
