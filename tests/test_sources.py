@@ -513,9 +513,9 @@ class TestEtfs:
         OfficialFetcher(tmp_path, http=FakeHttp(etf_routes())).fetch(["NDIV11"])
         # Lista salva por uma versão que ainda não baixava todas as categorias.
         cache = tmp_path / "etfs.json"
-        data = json.loads(cache.read_text())
+        data = json.loads(cache.read_text(encoding="utf-8"))
         data["types"] = ["ETF", "ETF-RF", "ETF-FII"]
-        cache.write_text(json.dumps(data))
+        cache.write_text(json.dumps(data), encoding="utf-8")
         http = FakeHttp(etf_routes())
         OfficialFetcher(tmp_path, http=http).fetch(["NDIV11"])
         assert b3.etf_list_url("ETF", 1) in http.requests
