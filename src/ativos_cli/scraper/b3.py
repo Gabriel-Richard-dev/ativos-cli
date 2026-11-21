@@ -29,8 +29,8 @@ FUNDS_URL = "https://sistemaswebb3-listados.b3.com.br/fundsListedProxy/Search/Ge
 SUPPLEMENT_URL = (
     "https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall/GetListedSupplementFunds"
 )
-# Categorias de ETF na B3: ações, renda fixa e fundos imobiliários.
-ETF_TYPES = ("ETF", "ETF-RF", "ETF-FII")
+# Categorias de ETF na B3: ações, renda fixa, fundos imobiliários e criptoativos.
+ETF_TYPES = ("ETF", "ETF-RF", "ETF-FII", "ETF-CRIPTO")
 # A B3 recusa páginas maiores que isso (responde lista vazia).
 ETF_PAGE_SIZE = 100
 # Código de "fundos" no serviço de proventos (vale para ETFs e FIIs).

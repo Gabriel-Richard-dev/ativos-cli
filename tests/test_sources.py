@@ -499,6 +499,27 @@ class TestEtfs:
         assert result.status == FetchStatus.OK
         assert http.requests == [b3.supplement_url("NDIV11")]
 
+    def test_crypto_etfs_are_listed(self, tmp_path):
+        crypto = {
+            "page": {"totalRecords": 1, "totalPages": 1},
+            "results": [{"acronym": "ETHY", "fundName": "BUENA VISTA DEX ETHEREUM HIGH INCOME"}],
+        }
+        routes = etf_routes() | {b3.etf_list_url("ETF-CRIPTO", 1): json.dumps(crypto).encode()}
+        etfs = OfficialFetcher(tmp_path, http=FakeHttp(routes)).etfs()
+        assert "ETHY11" in etfs
+        assert "NDIV11" in etfs
+
+    def test_cached_list_without_new_category_is_refreshed(self, tmp_path):
+        OfficialFetcher(tmp_path, http=FakeHttp(etf_routes())).fetch(["NDIV11"])
+        # Lista salva por uma versão que ainda não baixava todas as categorias.
+        cache = tmp_path / "etfs.json"
+        data = json.loads(cache.read_text())
+        data["types"] = ["ETF", "ETF-RF", "ETF-FII"]
+        cache.write_text(json.dumps(data))
+        http = FakeHttp(etf_routes())
+        OfficialFetcher(tmp_path, http=http).fetch(["NDIV11"])
+        assert b3.etf_list_url("ETF", 1) in http.requests
+
     def test_empty_list_answer_is_retried(self, tmp_path):
         empty = b'{"page": {"totalRecords": 0, "totalPages": 0}, "results": []}'
         answers = iter([empty, fixture_bytes("b3_etfs.json")])
@@ -630,3 +651,11 @@ class TestEtfAgenda:
         http = FakeHttp(etf_routes())
         OfficialFetcher(tmp_path, http=http).fetch(["NDIV11"])
         assert not any("buenavista" in u for u in http.requests)
+
+
+def test_busca_do_fundosnet_inclui_fiagros():
+    # Desde a CVM 175 os Fiagros publicam avisos como tipo de fundo 11, não 1 (FII):
+    # filtrar por tipo escondia os rendimentos novos deles.
+    url = fundosnet.search_url(CNPJ)
+    assert "tipoFundo=&" in url
+    assert "tipoFundo=1" not in url

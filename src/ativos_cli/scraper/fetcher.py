@@ -155,7 +155,9 @@ class OfficialFetcher:
                 return self._etfs
             cached = self.etf_cache.get("etfs")
             age = time.time() - (self.etf_cache.get("updated_at") or 0)
-            if cached and age < ETF_LIST_REFRESH_SECONDS and not refresh:
+            # Uma categoria nova (ex.: ETF-CRIPTO) invalida a lista antiga na hora.
+            same_types = self.etf_cache.get("types") == list(b3.ETF_TYPES)
+            if cached and same_types and age < ETF_LIST_REFRESH_SECONDS and not refresh:
                 self._etfs = cached
                 return cached
             try:
@@ -168,6 +170,7 @@ class OfficialFetcher:
             else:
                 self.etf_cache.set("etfs", etfs)
                 self.etf_cache.set("updated_at", time.time())
+                self.etf_cache.set("types", list(b3.ETF_TYPES))
             self._etfs = etfs
             return etfs
 

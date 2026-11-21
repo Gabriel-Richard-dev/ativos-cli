@@ -1,4 +1,4 @@
-"""Avisos de rendimentos no FundosNet (B3), a fonte oficial dos FIIs.
+"""Avisos de rendimentos no FundosNet (B3), a fonte oficial dos FIIs e Fiagros.
 
 Cada fundo publica um "Aviso aos Cotistas - Estruturado" do tipo "Rendimentos e
 Amortizações" com data-com, valor por cota e data de pagamento, em XML.
@@ -55,9 +55,11 @@ class Dividend:
 
 
 def search_url(cnpj: str, limit: int = NOTICES_TO_CHECK) -> str:
+    # Sem filtro de tipo de fundo: desde a adaptação à CVM 175 (out/2025) os Fiagros
+    # publicam como tipo 11 ("FIAGRO"), não mais 1 ("FII"); o CNPJ já identifica o fundo.
     return (
         f"{BASE_URL}/pesquisarGerenciadorDocumentosDados?d=1&s=0&l={limit}"
-        "&o%5B0%5D%5BdataEntrega%5D=desc&tipoFundo=1"
+        "&o%5B0%5D%5BdataEntrega%5D=desc&tipoFundo="
         f"&idCategoriaDocumento={CATEGORY_ID}&idTipoDocumento={TYPE_ID}"
         f"&idEspecieDocumento=0&cnpjFundo={cnpj}"
     )
